@@ -1,0 +1,20 @@
+root = true
+
+[*]
+charset = utf-8
+trim_trailing_whitespace = true
+end_of_line = lf
+insert_final_newline = true
+
+indent_style = space
+indent_size = 4
+
+[Makefile]
+; it's not as if we have a choice!
+indent_style = tab
+
+[*.{c,cc,cpp,h,hh,hpp,inl}]
+indent_brace_style = Allman
+curly_bracket_next_line = true
+; we also don't want space for `if(...` (as opposed to `if (...`),
+; but I don't know how to encode that here (probably not possible).
