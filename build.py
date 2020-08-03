@@ -68,7 +68,7 @@ for dir in object_dirs:
 t = Template('''\
 CFLAGS+=${CFLAGS}
 LDFLAGS=${LDFLAGS}
-INCLUDES=-Isrc
+INCLUDES=-Isrc -Ilib
 
 # for easy run in repl.it
 default: test

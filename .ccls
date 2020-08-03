@@ -1,5 +1,8 @@
 /usr/lib/llvm/10/bin/clang
 -std=c99
+-Ilib
 -Isrc
--Wall -Wextra -pedantic
+-Wall
+-Wextra
+-pedantic
 
