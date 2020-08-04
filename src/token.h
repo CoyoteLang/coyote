@@ -2,6 +2,7 @@
 #define COY_TOKEN_H_
 
 #include <stdint.h>
+#include <stddef.h>
 
 typedef struct coy_source_pos
 {
