@@ -37,12 +37,17 @@ parser.add_argument('--release', dest='cflags_mode', action='store_const',
                     help='Enable release build')
 parser.add_argument('-B', dest='force_rebuild', action='store_true',
                     help='Force rebuilding the project')
+parser.add_argument('-r', dest='dynamic', action='store_true',
+                    help='Build a dynamic executable')
 parser.add_argument('-j', dest='num_threads', nargs='?',
                     type=int, default=max(multiprocessing.cpu_count() // 2, 1),
                     help='Number of threads to run `make` with')
+
 args = parser.parse_args()
 CFLAGS = DEFAULT_FLAGS | args.cflags_mode | (set(itertools.chain(*args.cflags)) if args.cflags else set())
 LDFLAGS = DEFAULT_LDFLAGS
+if args.dynamic:
+    LDFLAGS = []
 
 sources = glob.glob('src/**/*.c', recursive=True) + ['test/main.c']
 
