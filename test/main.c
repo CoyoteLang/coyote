@@ -20,6 +20,7 @@ static const char src_lexer_parser[] =
         "    return 0;\n"
         "}\n"
 ;
+
 TEST(lexer)
 {
     coyc_lexer_t lexer;
@@ -37,6 +38,7 @@ TEST(lexer)
     }
     coyc_lexer_deinit(&lexer);
 }
+
 TEST(parser)
 {
     coyc_lexer_t lexer;
@@ -65,25 +67,9 @@ TEST(parser)
     coyc_lexer_deinit(&lexer);
 }
 
-// these are just to demonstrate, feel free to remove them
-/*TEST(failing)
-{
-    ASSERT(0 == 1);
-}*/
-TEST(skipped)
-{
-}
-TEST(todo)
-{
-    ASSERT_TODO("test TODO");
-}
-
 int main()
 {
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
-    //TEST_EXEC(failing);
-    TEST_SKIP(skipped, "demo skip");
-    TEST_EXEC(todo);
     return TEST_REPORT();
 }
