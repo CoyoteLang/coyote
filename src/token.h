@@ -32,6 +32,7 @@ typedef struct coy_source_range
     \
     ITEM(INTEGER),          \
     ITEM(IDENT),            \
+    ITEM(RETURN),           \
     \
     ITEMI(WSPACE),          \
     ITEMI(SLCOMMENT),       \

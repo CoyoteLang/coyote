@@ -174,6 +174,8 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
                 token.kind = COYC_TK_IMPORT;
             else if(COYC_LEXER_ISKEYWORD_(token, "native"))
                 token.kind = COYC_TK_NATIVE;
+            else if(COYC_LEXER_ISKEYWORD_(token, "return"))
+                token.kind = COYC_TK_RETURN;
             return token;
         default:
             fprintf(stderr, "lexer error near '%c' (\\x%.2X)\n", c, c);
