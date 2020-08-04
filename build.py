@@ -105,7 +105,10 @@ ${OBJ_DIR}/test/%.o: test/%.c ${headers}
     objects=' '.join(sorted(objects.values())),
 )
 print('-' * 10)
-print(t.rstrip())
+if '-Werror' in CFLAGS:
+    print("Makefile generated.")
+else:
+    print(t.rstrip())
 print('-' * 10)
 
 with NamedTemporaryFile('w', prefix='coy-build-', suffix='.mk', delete=False) as f:
