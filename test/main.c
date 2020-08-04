@@ -1,4 +1,5 @@
 #include "lexer.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -7,7 +8,9 @@
 
 int main()
 {
+    // First, test the lexer
     static const char src[] =
+            "module test;\n"
             "import std.io;\n"
             "int foo()\n"
             "{\n"
@@ -20,16 +23,16 @@ int main()
 
     for(;;)
     {
-        coyc_token_t* token = coyc_lexer_next(&lexer, COYC_LEXER_CATEGORY_PARSER);
-        if(token->kind == COYC_TK_EOF)
+        coyc_token_t token = coyc_lexer_next(&lexer, COYC_LEXER_CATEGORY_PARSER);
+        if(token.kind == COYC_TK_EOF)
             break;
-        coyc_token_dump_DBG(token);
+        coyc_token_dump_DBG(&token);
         fputs("\n", stdout);
         fflush(stdout);
-        if(token->kind == COYC_TK_ERROR)
+        if(token.kind == COYC_TK_ERROR)
             break;
     }
 
     coyc_lexer_deinit(&lexer);
-	return 0;
+    return 0;
 }
