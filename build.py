@@ -57,7 +57,7 @@ def obj_from_c(cname, skipn=0):
 sources_src = glob.glob('src/**/*.c', recursive=True)
 sources_test = ['test/main.c']
 sources = sources_src + sources_test
-headers = glob.glob('src/**/*.h', recursive=True)
+headers = glob.glob('src/**/*.h', recursive=True) + glob.glob('test/**/*.h', recursive=True)
 objects = {
     **{src: obj_from_c(src, 1) for src in sources_src},
     **{test: obj_from_c(test, 0) for test in sources_test}
