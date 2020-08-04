@@ -7,7 +7,7 @@
 #include <stdlib.h>
 
 // a simple assert won't do, because those are disableable
-#define CHECK(x)    do { if(!(x)) { fprintf(stderr, "CHECK failed: CHECK(%s)\n", #x); goto failed_cleanup; } } while(0)
+#define CHECK(x)    do { if(!(x)) { fprintf(stderr, "\x1b[31mTest failed: %s\x1b[0m\n", #x); failures += 1; } else { printf("\x1b[32mTest '%s' passed.\n\x1b[0m", #x); } } while(0)
 
 int main()
 {
@@ -21,6 +21,8 @@ int main()
             "    return 0;\n"
             "}\n"
     ;
+
+    size_t failures = 0;
 
     coyc_lexer_t lexer;
     CHECK(coyc_lexer_init(&lexer, "<src>", src, sizeof(src) - 1));
@@ -59,13 +61,16 @@ int main()
     CHECK(arrlen(func.instructions) == 1);
     CHECK(func.instructions[0].return_value.constant == 0);
 
+    if (failures == 0) {
+        printf("All tests passed.\n");
+    }
+    else {
+        printf("\n\x1b[31mTests failed!\n\x1b[0m");
+    }
+
     // Finally, clean up. Note that I only do this so Valgrind doesn't complain;
     // this will be handled by the OS anyways.
     coyc_tree_free(&root);
     coyc_lexer_deinit(&lexer);
-    return 0;
-failed_cleanup:
-    coyc_tree_free(&root);
-    coyc_lexer_deinit(&lexer);
-    return 1;
+    return failures;
 }
