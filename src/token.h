@@ -26,6 +26,7 @@ typedef struct coy_source_range
     ITEM(RBRACE),           \
     \
     ITEM(TYPE),             \
+    ITEM(MODULE),           \
     ITEM(IMPORT),           \
     ITEM(NATIVE),           \
     \

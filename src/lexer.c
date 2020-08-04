@@ -165,6 +165,8 @@ coyc_token_t* coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
             coyc_lexer_mktoken_(lexer, COYC_TK_IDENT, i);
             if(COYC_LEXER_ISKEYWORD_(lexer, "int") || COYC_LEXER_ISKEYWORD_(lexer, "uint"))
                 lexer->token.kind = COYC_TK_TYPE;
+            else if(COYC_LEXER_ISKEYWORD_(lexer, "module"))
+                lexer->token.kind = COYC_TK_MODULE;
             else if(COYC_LEXER_ISKEYWORD_(lexer, "import"))
                 lexer->token.kind = COYC_TK_IMPORT;
             else if(COYC_LEXER_ISKEYWORD_(lexer, "native"))
