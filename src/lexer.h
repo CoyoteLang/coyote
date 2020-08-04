@@ -12,6 +12,7 @@ typedef struct coyc_lexer
     char* src;          //< we'll just copy it into this (again, KISS)
     size_t offset;
     coy_source_pos_t pos;
+    coyc_token_t token;
 } coyc_lexer_t;
 
 coyc_lexer_t* coyc_lexer_init(coyc_lexer_t* lexer, const char* fname, const char* src, size_t srclen);

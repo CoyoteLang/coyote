@@ -35,6 +35,8 @@ coyc_lexer_t* coyc_lexer_init(coyc_lexer_t* lexer, const char* fname, const char
     lexer->src[lexer->srclen] = 0; // not technically necessary, but just for defense in depth
 
     lexer->pos = (coy_source_pos_t){.line=0, .col=0};
+
+    lexer->token = (coyc_token_t){.kind=COYC_TK_ERROR};
     return lexer;
 }
 void coyc_lexer_deinit(coyc_lexer_t* lexer)
@@ -82,20 +84,19 @@ static void coyc_lexer_skip_until_(coyc_lexer_t* lexer, int until, bool inclusiv
     coyc_lexer_advancec_(lexer, i);
 }
 
-coyc_token_t coyc_lexer_mktoken_(coyc_lexer_t* lexer, coyc_token_t *token, coyc_token_kind_t kind, size_t c)
+coyc_token_t coyc_lexer_mktoken_(coyc_lexer_t* lexer, coyc_token_kind_t kind, size_t c)
 {
-    token->kind = kind;
+    lexer->token.kind = kind;
     coyc_lexer_advancec_(lexer, c);
-    token->len += c;
-    token->range.tail = lexer->pos;
-    return *token;
+    lexer->token.len = &lexer->src[lexer->offset] - lexer->token.ptr;
+    lexer->token.range.tail = lexer->pos;
+    return lexer->token;
 }
 
-#define COYC_LEXER_ISKEYWORD_(token, keyword) (token.len == sizeof(keyword) - 1 && !memcmp(token.ptr, keyword, sizeof(keyword) - 1))
+#define COYC_LEXER_ISKEYWORD_(lexer, keyword) ((lexer)->token.len == sizeof(keyword) - 1 && !memcmp((lexer)->token.ptr, keyword, sizeof(keyword) - 1))
 
 coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
 {
-    coyc_token_t token = (coyc_token_t){.kind=COYC_TK_ERROR};
     //if(!categories) categories = COYC_LEXER_CATEGORY_PARSER;
     if(lexer->offset == (size_t)-1)
     {
@@ -108,22 +109,54 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
     }
     for(;;)
     {
-        token.ptr = &lexer->src[lexer->offset];
-        token.len = 0;
-        token.range.head = lexer->pos;
+        lexer->token.kind = COYC_TK_ERROR;
+        lexer->token.ptr = &lexer->src[lexer->offset];
+        lexer->token.len = 0;
+        lexer->token.range.head = lexer->pos;
 
         size_t i;
         int c = coyc_lexer_peekc_(lexer, 0);
         switch(c)
         {
-        case COYC_LEXER_EOF_: return coyc_lexer_mktoken_(lexer, &token, COYC_TK_EOF, 1);
-        case '.': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_DOT, 1);
-        case ',': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_COMMA, 1);
-        case ';': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_SCOLON, 1);
-        case '(': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_LPAREN, 1);
-        case ')': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_RPAREN, 1);
-        case '{': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_LBRACE, 1);
-        case '}': return coyc_lexer_mktoken_(lexer, &token, COYC_TK_RBRACE, 1);
+        case COYC_LEXER_EOF_: return coyc_lexer_mktoken_(lexer, COYC_TK_EOF, 0);
+        case '/':
+            c = coyc_lexer_peekc_(lexer, 1);
+            switch(c)
+            {
+            case '/':
+                coyc_lexer_advancec_(lexer, 2);
+                coyc_lexer_skip_until_(lexer, '\n', false);
+                if(categories & COYC_LEXER_CATEGORY_IGNORABLE)
+                    return coyc_lexer_mktoken_(lexer, COYC_TKI_SLCOMMENT, 0);
+                break;
+            case '*':
+                for(i = 2;; i++)
+                {
+                    c = coyc_lexer_peekc_(lexer, i);
+                    if(c == COYC_LEXER_EOF_)
+                    {
+                        fprintf(stderr, "lexer error: unterminated `/*` comment\n");
+                        abort();
+                    }
+                    if(c == '*' && coyc_lexer_peekc_(lexer, i+1) == '/')
+                    {
+                        i += 2;
+                        break;
+                    }
+                }
+                if(categories & COYC_LEXER_CATEGORY_IGNORABLE)
+                    return coyc_lexer_mktoken_(lexer, COYC_TKI_MLCOMMENT, i);
+                break;
+            default: return coyc_lexer_mktoken_(lexer, COYC_TK_OPDIV, 1);
+            }
+            break;
+        case '.': return coyc_lexer_mktoken_(lexer, COYC_TK_DOT, 1);
+        case ',': return coyc_lexer_mktoken_(lexer, COYC_TK_COMMA, 1);
+        case ';': return coyc_lexer_mktoken_(lexer, COYC_TK_SCOLON, 1);
+        case '(': return coyc_lexer_mktoken_(lexer, COYC_TK_LPAREN, 1);
+        case ')': return coyc_lexer_mktoken_(lexer, COYC_TK_RPAREN, 1);
+        case '{': return coyc_lexer_mktoken_(lexer, COYC_TK_LBRACE, 1);
+        case '}': return coyc_lexer_mktoken_(lexer, COYC_TK_RBRACE, 1);
         // \r should never show up, but just in case
         case '\r': case '\n': case '\t': case '\v': case '\f': case ' ':
             for(i = 1;; i++)
@@ -133,18 +166,14 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
                     break;
             }
             if(categories & COYC_LEXER_CATEGORY_IGNORABLE)
-                return coyc_lexer_mktoken_(lexer, &token, COYC_TKI_WSPACE, i);
+                return coyc_lexer_mktoken_(lexer, COYC_TKI_WSPACE, i);
             coyc_lexer_advancec_(lexer, i);
             break;
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
             for(i = 1; c >= '0' && c <= '9'; i++)
-            {
                 c = coyc_lexer_peekc_(lexer, i);
-                if(c == COYC_LEXER_EOF_)
-                    break;
-            }
-            return coyc_lexer_mktoken_(lexer, &token, COYC_TK_INTEGER, i - 1);
+            return coyc_lexer_mktoken_(lexer, COYC_TK_INTEGER, i - 1);
         // ugh ... but at least it's efficient! (I didn't want to cheat with `default`)
         case '_':
         case 'A': case 'B': case 'C': case 'D': case 'E':
@@ -165,18 +194,18 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
                 if(!('0' <= c && c <= '9') && !('A' <= c && c <= 'Z') && !('a' <= c && c <= 'z') && c != '_')
                     break;
             }
-            coyc_lexer_mktoken_(lexer, &token, COYC_TK_IDENT, i);
-            if(COYC_LEXER_ISKEYWORD_(token, "int") || COYC_LEXER_ISKEYWORD_(token, "uint"))
-                token.kind = COYC_TK_TYPE;
-            else if(COYC_LEXER_ISKEYWORD_(token, "module"))
-                token.kind = COYC_TK_MODULE;
-            else if(COYC_LEXER_ISKEYWORD_(token, "import"))
-                token.kind = COYC_TK_IMPORT;
-            else if(COYC_LEXER_ISKEYWORD_(token, "native"))
-                token.kind = COYC_TK_NATIVE;
-            else if(COYC_LEXER_ISKEYWORD_(token, "return"))
-                token.kind = COYC_TK_RETURN;
-            return token;
+            coyc_lexer_mktoken_(lexer, COYC_TK_IDENT, i);
+            if(COYC_LEXER_ISKEYWORD_(lexer, "int") || COYC_LEXER_ISKEYWORD_(lexer, "uint"))
+                lexer->token.kind = COYC_TK_TYPE;
+            else if(COYC_LEXER_ISKEYWORD_(lexer, "module"))
+                lexer->token.kind = COYC_TK_MODULE;
+            else if(COYC_LEXER_ISKEYWORD_(lexer, "import"))
+                lexer->token.kind = COYC_TK_IMPORT;
+            else if(COYC_LEXER_ISKEYWORD_(lexer, "native"))
+                lexer->token.kind = COYC_TK_NATIVE;
+            else if(COYC_LEXER_ISKEYWORD_(lexer, "return"))
+                lexer->token.kind = COYC_TK_RETURN;
+            return lexer->token;
         default:
             fprintf(stderr, "lexer error near '%c' (\\x%.2X)\n", c, c);
             abort();
@@ -184,4 +213,5 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
         }
     }
     assert(0);
+    return lexer->token;
 }

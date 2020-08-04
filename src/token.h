@@ -17,6 +17,8 @@ typedef struct coy_source_range
 #define COYC_ENUM_token_kind(ITEM,ITEMI,VAL,VLAST)    \
     ITEM(EOF),              \
     \
+    ITEM(OPDIV),            \
+    \
     ITEM(DOT),              \
     ITEM(COMMA),            \
     ITEM(SCOLON),           \
