@@ -119,5 +119,7 @@ if args.force_rebuild:
     extra.append('-B')
 if args.num_threads is not ...:
     extra.append('-j%u' % args.num_threads if args.num_threads else '-j')
-subprocess.call(['make'] + extra + ['-f', f.name, '--no-print-directory'])
+return_code = subprocess.call(['make'] + extra + ['-f', f.name, '--no-print-directory'])
 os.unlink(f.name)
+exit(return_code)
+
