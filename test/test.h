@@ -135,13 +135,6 @@ static int test_report_(void)
     } while(0)
 #define TEST_REPORT()       test_report_()
 
-// PRECONDITION() is used to check the test harness itself (e.g. whether memory allocation failed)
-#define PRECONDITION(x)     do { if(!(x)) TEST_RETURN_('F', "Precondition failed: %s", #x); } while(0)
-
-#define ASSERT_TODO(...)    TEST_RETURN_('T', __VA_ARGS__)
-#define ASSERT_MSG(x, ...)  do { if(!(x)) TEST_RETURN_('F', __VA_ARGS__); } while(0)
-#define ASSERT(x)           ASSERT_MSG(x, #x)
-
 bool test_assert_eq_ptr_(const void* x, const void* y, const char* msg, const char* file, int line)
 {
     if(x == y)
@@ -149,8 +142,6 @@ bool test_assert_eq_ptr_(const void* x, const void* y, const char* msg, const ch
     TEST_RESULT_('F', file, line, "%s [[%p == %p]]", msg, x, y);
     return false;
 }
-#define ASSERT_EQ_PTR(x, y) TEST_HELPER_(test_assert_eq_ptr_, x, y, #x " == " #y)
-
 bool test_assert_eq_str_(const char* x, const char* y, const char* msg, const char* file, int line)
 {
     if(!strcmp(x, y))
@@ -166,8 +157,6 @@ bool test_assert_eq_str_(const char* x, const char* y, const char* msg, const ch
     free(by);
     return false;
 }
-#define ASSERT_EQ_STR(x, y) TEST_HELPER_(test_assert_eq_str_, x, y, #x " == " #y)
-
 bool test_assert_eq_int_(int64_t x, int64_t y, const char* msg, const char* file, int line)
 {
     if(x == y)
@@ -175,7 +164,6 @@ bool test_assert_eq_int_(int64_t x, int64_t y, const char* msg, const char* file
     TEST_RESULT_('F', file, line, "%s [[%" PRIi64 " == %" PRIi64 "]]", msg, x, y);
     return false;
 }
-#define ASSERT_EQ_INT(x, y) TEST_HELPER_(test_assert_eq_int_, x, y, #x " == " #y)
 bool test_assert_eq_uint_(uint64_t x, uint64_t y, const char* msg, const char* file, int line)
 {
     if(x == y)
@@ -183,6 +171,17 @@ bool test_assert_eq_uint_(uint64_t x, uint64_t y, const char* msg, const char* f
     TEST_RESULT_('F', file, line, "%s [[%" PRIu64 " == %" PRIu64 "]]", msg, x, y);
     return false;
 }
+
+// PRECONDITION() is used to check the test harness itself (e.g. whether memory allocation failed)
+#define PRECONDITION(x)     do { if(!(x)) TEST_RETURN_('F', "Precondition failed: %s", #x); } while(0)
+
+#define ASSERT_TODO(...)    TEST_RETURN_('T', __VA_ARGS__)
+#define ASSERT_MSG(x, ...)  do { if(!(x)) TEST_RETURN_('F', __VA_ARGS__); } while(0)
+#define ASSERT(x)           ASSERT_MSG(x, #x)
+
+#define ASSERT_EQ_PTR(x, y) TEST_HELPER_(test_assert_eq_ptr_, x, y, #x " == " #y)
+#define ASSERT_EQ_STR(x, y) TEST_HELPER_(test_assert_eq_str_, x, y, #x " == " #y)
+#define ASSERT_EQ_INT(x, y) TEST_HELPER_(test_assert_eq_int_, x, y, #x " == " #y)
 #define ASSERT_EQ_UINT(x, y) TEST_HELPER_(test_assert_eq_uint_, x, y, #x " == " #y)
 
 
