@@ -138,13 +138,13 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
             break;
         case '0': case '1': case '2': case '3': case '4':
         case '5': case '6': case '7': case '8': case '9':
-            for(i = 1;; i++)
+            for(i = 1; c >= '0' && c <= '9'; i++)
             {
                 c = coyc_lexer_peekc_(lexer, i);
-                if(c == COYC_LEXER_EOF_ || !strchr("", c))
+                if(c == COYC_LEXER_EOF_)
                     break;
             }
-            return coyc_lexer_mktoken_(lexer, &token, COYC_TK_INTEGER, i);
+            return coyc_lexer_mktoken_(lexer, &token, COYC_TK_INTEGER, i - 1);
         // ugh ... but at least it's efficient! (I didn't want to cheat with `default`)
         case '_':
         case 'A': case 'B': case 'C': case 'D': case 'E':
