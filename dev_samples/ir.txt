@@ -5,6 +5,27 @@
 ;6: debugging
 ;7: VM-specific instructions
 
+;union Register
+;{
+;    int64_t i64;
+;    uint64_t u64;
+;    double f64;
+;    void* ptr;
+;};
+;struct Parameter
+;{
+;    uint32_t index : 24;
+;    uint32_t _reserved : 8; // eventually for VM register?
+;};
+;struct Instruction
+;{
+;    uint8_t op;
+;    uint8_t flags;
+;    uint8_t _reserved;  // eventually for VM register?
+;    uint8_t nparams;
+;    struct Parameter params[];
+;};
+
 ; Future categories: Delimited continuation handling, exception handling, optional value handling
 ; TODO: How to represent structs?
 
