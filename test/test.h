@@ -1,6 +1,8 @@
 #ifndef TEST_H_
 #define TEST_H_
 
+#define TEST_USE_COLOR 1
+
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -29,7 +31,11 @@ static struct test_results_ TEST_results;
 #define TEST_TOSTRING_(x)   #x
 #define TEST_TOSTRING(x)    TEST_TOSTRING_(x)
 
+#if TEST_USE_COLOR
 #define TEST_COLOR(c)   "\033[" TEST_TOSTRING(c) "m"
+#else
+#define TEST_COLOR(c)   ""
+#endif
 #define TEST_PRINT_ERROR_(...)  snprintf(TEST_results.error, sizeof(TEST_results.error), __VA_ARGS__)
 
 static void test_dumpstr_escaped_(char* buf, const char* str, int len)
@@ -170,6 +176,13 @@ bool test_assert_eq_int_(int64_t x, int64_t y, const char* msg, const char* file
     TEST_RESULT_('F', file, line, "%s [[%" PRIi64 " == %" PRIi64 "]]", msg, x, y);
     return false;
 }
+bool test_assert_ne_int_(int64_t x, int64_t y, const char* msg, const char* file, int line)
+{
+    if(x != y)
+        return true;
+    TEST_RESULT_('F', file, line, "%s [[%" PRIi64 " != %" PRIi64 "]]", msg, x, y);
+    return false;
+}
 bool test_assert_eq_uint_(uint64_t x, uint64_t y, const char* msg, const char* file, int line)
 {
     if(x == y)
@@ -188,6 +201,7 @@ bool test_assert_eq_uint_(uint64_t x, uint64_t y, const char* msg, const char* f
 #define ASSERT_EQ_PTR(x, y) TEST_HELPER_(test_assert_eq_ptr_, x, y, #x " == " #y)
 #define ASSERT_EQ_STR(x, y) TEST_HELPER_(test_assert_eq_str_, x, y, #x " == " #y)
 #define ASSERT_EQ_INT(x, y) TEST_HELPER_(test_assert_eq_int_, x, y, #x " == " #y)
+#define ASSERT_NE_INT(x, y) TEST_HELPER_(test_assert_ne_int_, x, y, #x " == " #y)
 #define ASSERT_EQ_UINT(x, y) TEST_HELPER_(test_assert_eq_uint_, x, y, #x " == " #y)
 
 

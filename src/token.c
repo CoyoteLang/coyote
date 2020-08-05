@@ -34,6 +34,16 @@ void coyc_token_dump_DBG(const coyc_token_t* token)
     printf("%3" PRIu32 ":%s(%" PRIu32 ":%" PRIu32 "): ", token->kind, coyc_token_kind_tostr_DBG(token->kind), token->range.head.line, token->range.head.col);
     coyc_dumpstr_escaped_DBG(token->ptr, token->len);
 }
+void coyc_token_dump_simple_DBG(const coyc_token_t* token, int color)
+{
+    if(color) fputs("\033[97m", stdout);
+    fputs(coyc_token_kind_tostr_DBG(token->kind), stdout);
+    if(color) fputs("\033[0m", stdout);
+    putchar(':');
+    if(color) fputs("\033[94m", stdout);
+    coyc_dumpstr_escaped_DBG(token->ptr, token->len);
+    if(color) fputs("\033[0m", stdout);
+}
 const char* coyc_token_kind_tostr_DBG(coyc_token_kind_t kind)
 {
     static const char* KindNames[COYC_TK_LAST_+1] = {
