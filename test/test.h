@@ -101,9 +101,13 @@ static int test_report_(void)
 {
     printf("----------\n");
     uint32_t all = TEST_results.stats.pass + TEST_results.stats.skip + TEST_results.stats.todo + TEST_results.stats.fail + TEST_results.stats.unknown;
-    printf(TEST_COLOR(92) "TOTAL PASS" TEST_COLOR(32) ": %" PRIu32 TEST_COLOR(90) "/%" PRIu32 TEST_COLOR(0) "\n", TEST_results.stats.pass, all);
+    if (TEST_results.stats.pass > 0)
+        printf(TEST_COLOR(92) "TOTAL PASS" TEST_COLOR(32) ": %" PRIu32 TEST_COLOR(90) "/%" PRIu32 TEST_COLOR(0) "\n", TEST_results.stats.pass, all);
+    if (TEST_results.stats.skip > 0)
     printf(TEST_COLOR(96) "TOTAL SKIP" TEST_COLOR(36) ": %" PRIu32 TEST_COLOR(90) "/%" PRIu32 TEST_COLOR(0) "\n", TEST_results.stats.skip, all);
+    if (TEST_results.stats.todo > 0)
     printf(TEST_COLOR(93) "TOTAL TODO" TEST_COLOR(33) ": %" PRIu32 TEST_COLOR(90) "/%" PRIu32 TEST_COLOR(0) "\n", TEST_results.stats.todo, all);
+    if (TEST_results.stats.fail > 0)
     printf(TEST_COLOR(91) "TOTAL FAIL" TEST_COLOR(31) ": %" PRIu32 TEST_COLOR(90) "/%" PRIu32 TEST_COLOR(0) "\n", TEST_results.stats.fail, all);
     if(TEST_results.stats.unknown)
         printf(TEST_COLOR(97) "*** WARNING: Had %" PRIu32 " unknown test%s. Possible memory corruption or invalid API use?" TEST_COLOR(0) "\n", TEST_results.stats.unknown, TEST_results.stats.unknown >= 2 ? "s" : "");
