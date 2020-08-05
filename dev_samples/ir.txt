@@ -1,0 +1,58 @@
+;0: comparisons
+;1: branches
+;2: compound types
+;3: arithmetic
+;6: debugging
+;7: VM-specific instructions
+
+; Future categories: Delimited continuation handling, exception handling, optional value handling
+; TODO: How to represent structs?
+
+    MNEMONIC; FLAGS         ; REGISTERS             ; COMMENT
+Arithmetic
+    neg     ; {uf}{WD}      ; $a                    ; -$a
+    add     ; {uf}{WD}      ; $a, $b
+    sub     ; {uf}{WD}      ; $a, $b
+    mul     ; {uf}{WD}      ; $a, $b
+    div     ; {uf}{WD}      ; $a, $b
+    rem     ; {uf}{WD}      ; $a, $b                ; Remainder (sign of $a).
+    mod     ; {uf}{WD}      ; $a, $b                ; Modulo (sign of $b).
+    pow     ; {uf}{WD}      ; $a, $b                ; TODO: Semantics of negative-integer `pow`? TODO: Special-case `pow(float,int)`?
+
+Bitwise
+    bcom    ; {WD}          ; $a
+    band    ; {WD}          ; $a, $b
+    bxor    ; {WD}          ; $a, $b
+    bor     ; {WD}          ; $a, $b
+    bsll    ; {WD}          ; $a, $b                ; $a << $b
+    bsrl    ; {WD}          ; $a, $b                ; $a >>> $b (logical shift)
+    bsra    ; {WD}          ; $a, $b                ; $a >> $b (arithmetic shift)
+    ;slr    ;                                       ; RESERVED (left bit rotation)
+    ;srr    ;                                       ; RESERVED (right bit rotation)
+
+Comparison and Control Flow
+    cmp     ; {CM} {uf}{WD} ; $a, $b
+    jmp     ; {j}           ; $test, ADDR, $args...
+    call    ;               ; $func, $args...
+    ;tcall  ;               ; $func, $args...       ; RESERVED (tail call)
+    ret     ;               ; $values...            ; For now, $values.length <= 1.
+
+Composite-Type Operations
+    refnew  ;               ; s$type                    ; Create a new reference object.
+    refload ; {WDP}         ; $ref, s$symbol            ; Load a value from refobj member.
+    refstore; {WDP}         ; $ref, s$symbol, $value    ; Store a value into refobj member.
+    arrnew  ;               ; s$type, $dims...          ; Create a new array.
+    arrload ; {WDP}         ; $arr, $index...           ; Load a value from the array.
+    arrstore; {WDP}         ; $arr, $index..., $value;  ; Store a value into the array.
+    ; TODO array: slicing, reshaping
+    ; TODO traits
+
+Error Handling
+    assert  ;               ; $test, $message       ; A constant-value failed `test` has special behavior: The assert must not be removed. Message is optional.
+                                                    ; (TODO: figure out how to only evaluate $message if assert is false ...)
+
+Debugging Aid
+    __rename;               ; $value, NAME...       ; No-op, except to rename a value's debug name (as an exception to normal rules, the name is encoded as a 0-terminated UTF-8 string in args)
+    __dump  ; {uf}{WD}      ; $value                ; Dump value to stdout.
+    __dumpl ;               ;                       ; Dump all locals to stdout.
+    __break ;               ;                       ; Breakpoint: Pause VM execution, allowing inspection.
