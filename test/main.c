@@ -119,9 +119,16 @@ TEST(parser)
     coyc_lexer_deinit(&lexer);
 }
 
+extern void vm_test_basicDBG(void);
+TEST(vm_basic)
+{
+    vm_test_basicDBG();
+}
+
 int main()
 {
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
+    TEST_EXEC(vm_basic);
     return TEST_REPORT();
 }
