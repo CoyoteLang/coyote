@@ -73,6 +73,13 @@ static void test_dumpstr_escaped_(char* buf, const char* str, int len)
     *buf++ = '`';
     *buf = 0;
 }
+static char* test_dumpstr_escaped_alloc_(const char* str, int len)
+{
+    if(len < 0) len = str ? strlen(str) : sizeof("<null>") - 1;
+    char* buf = malloc(len + 1);
+    test_dumpstr_escaped_(buf, str, len);
+    return buf;
+}
 static void test_handle_result_(void)
 {
     const char* bcolor;
@@ -158,20 +165,11 @@ bool test_assert_eq_str_(const char* x, const char* y, const char* msg, const ch
 {
     if(x == y || (x && y && !strcmp(x, y)))
         return true;
-    size_t lx = x ? strlen(x) : 0;
-    char* bx = malloc(lx * 4 + 7);
-    test_dumpstr_escaped_(bx, x, lx);
-    if (y)
-    {
-        size_t ly = strlen(y);
-        char* by = malloc(ly * 4 + 7);
-        test_dumpstr_escaped_(by, y, ly);
-        TEST_RESULT_('F', file, line, "%s [[%s == %s]]", msg, bx, by);
-        free(by);
-    }
-    else
-        TEST_RESULT_('F', file, line, "%s [[%s]]", msg, bx);
+    char* bx = test_dumpstr_escaped_alloc_(x, -1);
+    char* by = test_dumpstr_escaped_alloc_(y, -1);
+    TEST_RESULT_('F', file, line, "%s [[%s == %s]]", msg, bx, by);
     free(bx);
+    free(by);
     return false;
 }
 bool test_assert_eq_int_(int64_t x, int64_t y, const char* msg, const char* file, int line)
