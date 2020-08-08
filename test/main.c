@@ -82,8 +82,12 @@ TEST(parser)
     coyc_lexer_t lexer;
     PRECONDITION(coyc_lexer_init(&lexer, "<src_lexer_parser>", src_lexer_parser, sizeof(src_lexer_parser) - 1));
 
+    coyc_pctx_t ctx;
     root_node_t root;
-    ASSERT_EQ_PTR(coyc_parse(&lexer, &root), &root);
+    ctx.lexer = &lexer;
+    ctx.root = &root;
+    coyc_parse(&ctx);
+    ASSERT_EQ_STR(ctx.err_msg, NULL);
 
     // Validate the results
     ASSERT(root.module_name);
@@ -101,7 +105,7 @@ TEST(parser)
 
     // Finally, clean up. Note that I only do this so Valgrind doesn't complain;
     // this will be handled by the OS anyways.
-    coyc_tree_free(&root);
+    coyc_tree_free(&ctx);
     coyc_lexer_deinit(&lexer);
 }
 

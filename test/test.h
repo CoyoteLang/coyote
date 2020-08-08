@@ -156,17 +156,22 @@ bool test_assert_eq_ptr_(const void* x, const void* y, const char* msg, const ch
 }
 bool test_assert_eq_str_(const char* x, const char* y, const char* msg, const char* file, int line)
 {
-    if(!strcmp(x, y))
+    if(x == y || (x && y && !strcmp(x, y)))
         return true;
-    size_t lx = strlen(x);
-    size_t ly = strlen(y);
+    size_t lx = x ? strlen(x) : 0;
     char* bx = malloc(lx * 4 + 7);
-    char* by = malloc(ly * 4 + 7);
     test_dumpstr_escaped_(bx, x, lx);
-    test_dumpstr_escaped_(by, y, ly);
-    TEST_RESULT_('F', file, line, "%s [[%s == %s]]", msg, bx, by);
+    if (y)
+    {
+        size_t ly = strlen(y);
+        char* by = malloc(ly * 4 + 7);
+        test_dumpstr_escaped_(by, y, ly);
+        TEST_RESULT_('F', file, line, "%s [[%s == %s]]", msg, bx, by);
+        free(by);
+    }
+    else
+        TEST_RESULT_('F', file, line, "%s [[%s]]", msg, bx);
     free(bx);
-    free(by);
     return false;
 }
 bool test_assert_eq_int_(int64_t x, int64_t y, const char* msg, const char* file, int line)
