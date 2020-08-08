@@ -5,4 +5,5 @@
 -Wall
 -Wextra
 -pedantic
+-D_XOPEN_SOURCE=500
 
