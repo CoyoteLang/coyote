@@ -69,5 +69,6 @@ void coyc_dumpstr_escaped_DBG(const char* str, size_t len);
 void coyc_token_dump_DBG(const coyc_token_t* token);
 void coyc_token_dump_simple_DBG(const coyc_token_t* token, int color);
 const char* coyc_token_kind_tostr_DBG(coyc_token_kind_t kind);
+char *coyc_token_read(coyc_token_t token);
 
 #endif /* COY_TOKEN_H_ */

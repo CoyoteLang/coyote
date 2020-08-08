@@ -1,5 +1,7 @@
 #include "token.h"
 
+#include <stdlib.h>
+#include <string.h>
 // for debug
 #include <stdio.h>
 #include <inttypes.h>
@@ -60,4 +62,12 @@ const char* coyc_token_kind_tostr_DBG(coyc_token_kind_t kind)
     if(kind < 0 || sizeof(KindNames) / sizeof(*KindNames) <= kind)
         return "<unknown>";
     return KindNames[kind];
+}
+
+char *coyc_token_read(coyc_token_t token)
+{
+    char *buf = malloc(token.len + 1);
+    strncpy(buf, token.ptr, token.len);
+    buf[token.len] = 0;
+    return buf;
 }

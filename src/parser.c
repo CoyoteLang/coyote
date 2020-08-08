@@ -9,21 +9,40 @@ tolerant is extremely important, and a high-priority TODO.
 #include "stb_ds.h"
 
 #include <inttypes.h>
+#include <setjmp.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-root_node_t *error(root_node_t *root, const char *msg) {
+void error(coyc_pctx_t *ctx, const char *msg) {
     fprintf(stderr, "Parser: %s\n", msg);
-    if (root->module_name) {
-        free(root->module_name);
-        root->module_name = NULL;
+    ctx->err_msg = strdup(msg);
+    longjmp(ctx->err_env, 255);
+}
+
+void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    int len = vsnprintf(NULL, 0, fmt, args);
+    char *buf = malloc(len + 1);
+    vsprintf(buf, fmt, args);
+    va_end(args);
+    ctx->err_msg = buf;
+    fprintf(stderr, "Parser: %s\n", buf);
+    longjmp(ctx->err_env, 255);
+}
+
+void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
+    char buf[128];
+    size_t len = token.len < 128 ? token.len : 127;
+    strncpy(buf, token.ptr, len);
+    buf[len] = 0;
+    if (token.len != len) {
+        fprintf(stderr, "Warning: token len exceeded 128, truncated.\n");
     }
-    if (root->imports) {
-        // TODO
-    }
-    return NULL;
+    errorf(ctx, fmt, buf);
 }
 
 type_t coyc_type(coyc_token_t token) {
@@ -35,150 +54,187 @@ type_t coyc_type(coyc_token_t token) {
     return type;
 }
 
-root_node_t *coyc_parse(coyc_lexer_t *lexer, root_node_t *root)
+static void parse_module(coyc_pctx_t *ctx)
 {
-    if (!lexer) return NULL;
-    if (!root) return NULL;
+    if (ctx->tokens[0].kind != COYC_TK_MODULE) {
+        error(ctx, "Missing a module statement!");
+    }
+    
+    if (ctx->root->module_name) {
+        error(ctx, "Invalid `module` statement found!");
+    }
+
+    if (ctx->tokens[1].kind != COYC_TK_IDENT) {
+        error(ctx, "Expected identifier for module name!");
+    }
+
+    ctx->root->module_name = coyc_token_read(ctx->tokens[1]);
+
+    if (ctx->tokens[2].kind != COYC_TK_SCOLON) {
+        error(ctx, "Expected semicolon after module statement!");
+    }
+    ctx->token_index = 3;
+}
+
+// Returns true if there's no more instructions
+static bool parse_instruction(coyc_pctx_t *ctx, function_t *function)
+{
+    coyc_token_t token = ctx->tokens[ctx->token_index];
+    if (token.kind == COYC_TK_EOF) {
+        error(ctx, "Error: expected '}', found EOF!");
+    }
+    if (token.kind == COYC_TK_ERROR) {
+        error(ctx, "Error in lexer while parsing function body!");
+    }
+    if (token.kind == COYC_TK_RBRACE) {
+        ctx->token_index += 1;
+        return true;
+    }
+    if (token.kind == COYC_TK_RETURN) {
+        ctx->token_index += 1;
+        token = ctx->tokens[ctx->token_index];
+        if (token.kind == COYC_TK_INTEGER) {
+            instruction_t instruction;
+            sscanf(token.ptr, "%" SCNu64, &instruction.return_value.constant);
+            arrput(function->instructions, instruction);
+            ctx->token_index += 1;
+            token = ctx->tokens[ctx->token_index];
+            if (token.kind != COYC_TK_SCOLON) {
+                error(ctx, "TODO return INT [^;]");
+            }
+            ctx->token_index += 1;
+            return false;
+        }
+        else {
+            errorf(ctx, "TODO parser.c:%d", __LINE__);
+        }
+    }
+    else {
+        errorf(ctx, "TODO parse function instruction %s", coyc_token_kind_tostr_DBG(token.kind));
+    }
+    return false;
+}
+
+/// token_index must mark the first token after the LPAREN
+static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
+{
+    function_t function;
+    function.instructions = NULL;
+    function.name = ident;
+    function.return_type = type;
+    coyc_token_t token = ctx->tokens[ctx->token_index];
+    if (token.kind != COYC_TK_RPAREN) {
+        error(ctx, "TODO support parsing parameter list");
+    }
+    ctx->token_index += 1;
+    token = ctx->tokens[ctx->token_index];
+    if (token.kind != COYC_TK_LBRACE) {
+        errorf(ctx, "Error: expected function body, found %s", coyc_token_kind_tostr_DBG(token.kind));
+    }
+    ctx->token_index += 1;
+
+    while (!parse_instruction(ctx, &function));
+
+    arrput(ctx->root->functions, function);
+}
+
+static void parse_decl(coyc_pctx_t *ctx)
+{
+    coyc_token_t token = ctx->tokens[ctx->token_index];
+    if (token.kind == COYC_TK_TYPE) {
+        const type_t type = coyc_type(token);
+        if (type.primitive == invalid) {
+            error_token(ctx, token, "TODO parse type %s");
+        }
+        ctx->token_index += 1;
+        token = ctx->tokens[ctx->token_index];
+        if (token.kind == COYC_TK_IDENT) {
+            char *ident = coyc_token_read(token);
+            ctx->token_index += 1;
+            token = ctx->tokens[ctx->token_index];
+            if (token.kind == COYC_TK_LPAREN) {
+                ctx->token_index += 1;
+                parse_function(ctx, type, ident);
+            }
+            else {
+                errorf(ctx, "TODO parser TYPE IDENT %s", coyc_token_kind_tostr_DBG(token.kind));
+            }
+        }
+        else {
+            errorf(ctx, "TODO parser TYPE %s", coyc_token_kind_tostr_DBG(token.kind));
+        }
+    }
+    else {
+        errorf(ctx, "TODO parse %s", coyc_token_kind_tostr_DBG(token.kind));    
+    }
+}
+
+void coyc_parse(coyc_pctx_t *ctx)
+{
+    if (!ctx) return;
+    coyc_lexer_t *lexer = ctx->lexer;
+    if (!lexer) return;
+    root_node_t *root = ctx->root;
+    if (!root) return;
 
     root->imports = NULL;
     root->module_name = NULL;
     root->functions = NULL;
 
-    coyc_token_t token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-    if (token.kind != COYC_TK_MODULE) {
-        return error(root, "Missing a module statement!");
+    ctx->err_msg = NULL;
+    ctx->root = root;
+    ctx->tokens = NULL;
+    ctx->token_index = 0;
+
+    for(;;){
+        coyc_token_t token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
+        if(token.kind == COYC_TK_EOF)
+            break;
+        arrput(ctx->tokens, token);
     }
 
-    char buf[256];
-    
-    while (token.kind != COYC_TK_EOF && token.kind != COYC_TK_ERROR)
+    if (arrlen(ctx->tokens) == 0) {
+        coyc_tree_free(ctx);
+        return;
+    }
+
+    if (setjmp(ctx->err_env) == 255)
     {
-        switch (token.kind)
-        {
-        case COYC_TK_MODULE:
-            if (root->module_name)
-            {
-                return error(root, "Invalid `module` statement found!");
-            }
-            token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-            if (token.kind != COYC_TK_IDENT) {
-                return error(root, "Expected identifier for module name!");
-            }
-            root->module_name = malloc(token.len + 1);
-            strncpy(root->module_name, token.ptr, token.len);
-            root->module_name[token.len] = 0;
-
-            token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-            if (token.kind != COYC_TK_SCOLON) {
-                return error(root, "Expected semicolon after module statement!");
-            }
-
-            break;
-        case COYC_TK_TYPE:{
-            const type_t type = coyc_type(token);
-            if (type.primitive == invalid) {
-                buf[0] = 0;
-                strncat(strcat(buf, "TODO parse type "), token.ptr, token.len);
-                return error(root, buf);
-            }
-            token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-            switch (token.kind)
-            {
-            case COYC_TK_IDENT: {
-                char *name = malloc(token.len + 1);
-                name[token.len] = 0;
-                strncpy(name, token.ptr, token.len);
-
-                token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-                if (token.kind == COYC_TK_LPAREN) {
-
-                    function_t function;
-                    function.instructions = NULL;
-                    function.name = name;
-                    function.return_type = type;
-                    
-                    token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-                    if (token.kind != COYC_TK_RPAREN) {
-                        return error(root, "TODO support parsing parameter list");
-                    }
-                    token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-                    if (token.kind != COYC_TK_LBRACE) {
-                        return error(root, "Error: expected function body!");
-                    }
-                    while (true)
-                    {
-                        token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-                        if (token.kind == COYC_TK_EOF) {
-                            return error(root, "Error: expected '}', found EOF!");
-                        }
-                        if (token.kind == COYC_TK_ERROR) {
-                            return error(root, "Error in lexer while parsing function body!");
-                        }
-                        if (token.kind == COYC_TK_RBRACE) {
-                            break;
-                        }
-                        if (token.kind == COYC_TK_RETURN) {
-                            token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-                            if (token.kind == COYC_TK_INTEGER) {
-                                instruction_t instruction;
-                                sscanf(token.ptr, "%" SCNu64, &instruction.return_value.constant);
-                                arrput(function.instructions, instruction);
-                                token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
-                                if (token.kind != COYC_TK_SCOLON) {
-                                    return error(root, "TODO return INT [^;]");
-                                }
-                            }
-                            else {
-                                sprintf(buf, "TODO parser.c:%d", __LINE__);
-                                return error(root, buf);
-                            }
-                        }
-                        else {
-                            sprintf(buf, "TODO parse function instruction %s", coyc_token_kind_tostr_DBG(token.kind));
-                            return error(root, buf);
-                        }
-                        arrput(root->functions, function);
-                    }
-                }
-                else {
-                    sprintf(buf, "TODO parser pattern TYPE IDENT %s", coyc_token_kind_tostr_DBG(token.kind));
-                    return error(root, buf);
-                }
-                break; }
-            default: 
-                sprintf(buf, "TODO parser pattern TYPE %s", coyc_token_kind_tostr_DBG(token.kind));
-                return error(root, buf);
-            }
-
-            break;
-        }
-        default:{
-            sprintf(buf, "TODO parse token %s", coyc_token_kind_tostr_DBG(token.kind));
-            return error(root, buf);
-        }}
-        token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
+        // Error
+        return;
     }
 
-    return root;
+    parse_module(ctx);
+    while (ctx->token_index < arrlenu(ctx->tokens)) {
+        parse_decl(ctx);
+    }
+
 }
 
-void coyc_tree_free(root_node_t *node)
+void coyc_tree_free(coyc_pctx_t *ctx)
 {
-    if (node->module_name) {
-        free(node->module_name);
-        node->module_name = NULL;
+    arrfree(ctx->tokens);
+    if (ctx->err_msg) {
+        free(ctx->err_msg);
     }
-    if (node->functions) {
-        for (int i = 0; i < arrlen(node->functions); i++) {
-            function_t *func = &node->functions[i];
-            if (func->name) {
-                free(func->name);
-                func->name = NULL;
-            }
-            if (func->instructions) {
-                arrfree(func->instructions);
-            }
+    if (ctx->root)
+    {
+        if (ctx->root->module_name) {
+            free(ctx->root->module_name);
+            ctx->root->module_name = NULL;
         }
-        arrfree(node->functions);
+        if (ctx->root->functions) {
+            for (int i = 0; i < arrlen(ctx->root->functions); i++) {
+                function_t *func = &ctx->root->functions[i];
+                if (func->name) {
+                    free(func->name);
+                    func->name = NULL;
+                }
+                if (func->instructions) {
+                    arrfree(func->instructions);
+                }
+            }
+            arrfree(ctx->root->functions);
+        }
     }
 }

@@ -44,8 +44,20 @@ typedef struct {
 } root_node_t;
 
 /// Returns the root node
-root_node_t *coyc_parse(coyc_lexer_t *lexer, root_node_t *root);
-void coyc_tree_free(root_node_t *node);
+#include <setjmp.h>
+
+typedef struct coyc_pctx {
+    root_node_t *root;
+    coyc_token_t *tokens;
+    size_t token_index;
+    char *err_msg;
+    coyc_lexer_t *lexer;
+    jmp_buf err_env;
+} coyc_pctx_t;
+
+// Pointer can get clobbered by longjmp, so we don't return it.
+void coyc_parse(coyc_pctx_t *ctx);
+void coyc_tree_free(coyc_pctx_t *ctx);
 
 #endif // COY_AST_H_
 
