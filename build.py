@@ -19,7 +19,7 @@ EXE_EXT = '.exe' if os.name == 'nt' else ''
 # For now, we'll keep compiler source in 'src/compiler' and VM source in 'src/vm', with shared stuff in 'src/' directly.
 BIN_NAME = 'coyote' + EXE_EXT
 
-DEFAULT_FLAGS = {'-Wall', '-pedantic', '-D_XOPEN_SOURCE=500'}
+DEFAULT_FLAGS = {'-Wall', '-pedantic'}
 DEBUG_FLAGS = {'-g', '-Og'}
 # pixelherodev's personal flag set :P I'm insane, I know.
 PIXELS_DEVEL_FLAGS = { '-Werror', '-Wextra', '-pedantic', '-march=native', '-mtune=native', '-falign-functions=32' }

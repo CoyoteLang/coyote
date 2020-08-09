@@ -6,6 +6,7 @@ tolerant is extremely important, and a high-priority TODO.
  */
 
 #include "ast.h"
+#include "util/string.h"
 #include "stb_ds.h"
 
 #include <inttypes.h>
@@ -18,7 +19,7 @@ tolerant is extremely important, and a high-priority TODO.
 
 void error(coyc_pctx_t *ctx, const char *msg) {
     fprintf(stderr, "Parser: %s\n", msg);
-    ctx->err_msg = strdup(msg);
+    ctx->err_msg = coy_strdup_(msg, -1);
     longjmp(ctx->err_env, 255);
 }
 
