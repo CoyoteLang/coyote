@@ -83,7 +83,7 @@ TEST(parser)
     PRECONDITION(coyc_lexer_init(&lexer, "<src_lexer_parser>", src_lexer_parser, sizeof(src_lexer_parser) - 1));
 
     coyc_pctx_t ctx;
-    root_node_t root;
+    ast_root_t root;
     ctx.lexer = &lexer;
     ctx.root = &root;
     coyc_parse(&ctx);
@@ -92,16 +92,26 @@ TEST(parser)
     // Validate the results
     ASSERT(root.module_name);
     ASSERT_EQ_STR(root.module_name, "test");
-    ASSERT(!root.imports);
-    ASSERT(root.functions);
-    ASSERT_EQ_UINT(arrlen(root.functions), 1);
-    function_t func = root.functions[0];
-    ASSERT(func.name);
-    ASSERT_EQ_STR(func.name, "foo");
+    ASSERT(root.decls);
+    ASSERT_EQ_UINT(arrlen(root.decls), 1);
+    decl_t decl = root.decls[0];
+    ASSERT(decl.base.type == function);
+    function_t func = decl.function;
+    ASSERT(func.base.name);
+    ASSERT_EQ_STR(func.base.name, "foo");
     ASSERT_EQ_INT(func.return_type.primitive, _int);
-    ASSERT(func.instructions);
-    ASSERT_EQ_UINT(arrlen(func.instructions), 1);
-    ASSERT_EQ_INT(func.instructions[0].return_value.constant, 0);
+    ASSERT(func.statements);
+    ASSERT_EQ_UINT(arrlen(func.statements), 1);
+    statement_t stmt = func.statements[0];
+    ASSERT_EQ_INT(stmt.type, return_);
+    ASSERT(stmt.return_.value);
+    ASSERT_EQ_INT(stmt.return_.value->lhs.type, literal);
+    ASSERT(stmt.return_.value->lhs.type == literal);
+    ASSERT_EQ_INT(stmt.return_.value->op.kind, COYC_TK_SCOLON);
+    ASSERT_EQ_INT(stmt.return_.value->rhs.type, none);
+    ASSERT_EQ_INT(stmt.return_.value->type.primitive, uint);
+    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.primitive, uint);
+    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.value, 0);
 
     // Finally, clean up. Note that I only do this so Valgrind doesn't complain;
     // this will be handled by the OS anyways.

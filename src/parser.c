@@ -17,13 +17,17 @@ tolerant is extremely important, and a high-priority TODO.
 #include <stdlib.h>
 #include <string.h>
 
-void error(coyc_pctx_t *ctx, const char *msg) {
-    fprintf(stderr, "Parser: %s\n", msg);
-    ctx->err_msg = coy_strdup_(msg, -1);
-    longjmp(ctx->err_env, 255);
-}
+#ifdef noreturn
+#define coy_noreturn noreturn
+#elif __STDC_VERSION__ >= 201112L
+#define coy_noreturn _Noreturn
+#elif __GNUC__ 
+#define coy_noreturn __attribute__ ((noreturn))
+#else
+#define coy_noreturn 
+#endif
 
-void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
+coy_noreturn void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     int len = vsnprintf(NULL, 0, fmt, args);
@@ -35,7 +39,11 @@ void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
     longjmp(ctx->err_env, 255);
 }
 
-void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
+coy_noreturn void error(coyc_pctx_t *ctx, const char *msg) {
+    errorf(ctx, "%s", msg);
+}
+
+coy_noreturn void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
     char buf[128];
     size_t len = token.len < 128 ? token.len : 127;
     strncpy(buf, token.ptr, len);
@@ -77,8 +85,46 @@ static void parse_module(coyc_pctx_t *ctx)
     ctx->token_index = 3;
 }
 
+static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_prec) {
+    if (ctx->token_index > arrlenu(ctx->tokens)) {
+        error(ctx, "Unexpected EOF!");
+    }
+    coyc_token_t token = ctx->tokens[ctx->token_index];
+    if (token.kind == COYC_TK_LPAREN) {
+        error(ctx, "TODO parens");
+    }
+    if (token.kind == COYC_TK_INTEGER) {
+        expression_value_t val;
+        val.literal.type = literal;
+        val.literal.value.integer.type.primitive = uint;
+        // TODO: error checking
+        sscanf(token.ptr, "%" SCNu64, &val.literal.value.integer.value);
+        ctx->token_index += 1;
+        return val;
+    }
+    error(ctx, "TODO more atoms");
+    // Not yet used.
+    (void)minimum_prec;
+}
+
+static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec) {
+    (void)minimum_prec;
+    expression_t *expr = malloc(sizeof(expression_t));
+    expr->lhs = compute_atom(ctx, minimum_prec);
+    coyc_token_t token = ctx->tokens[ctx->token_index];
+    if (token.kind == COYC_TK_SCOLON) {
+        ctx->token_index += 1;
+        expr->rhs.type = none;
+        expr->op = token;
+        // TODO
+        expr->type = expr->lhs.literal.value.integer.type;
+        return expr;
+    }
+    error(ctx, "TODO");
+}
+
 // Returns true if there's no more instructions
-static bool parse_instruction(coyc_pctx_t *ctx, function_t *function)
+static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
 {
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind == COYC_TK_EOF) {
@@ -94,21 +140,10 @@ static bool parse_instruction(coyc_pctx_t *ctx, function_t *function)
     if (token.kind == COYC_TK_RETURN) {
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
-        if (token.kind == COYC_TK_INTEGER) {
-            instruction_t instruction;
-            sscanf(token.ptr, "%" SCNu64, &instruction.return_value.constant);
-            arrput(function->instructions, instruction);
-            ctx->token_index += 1;
-            token = ctx->tokens[ctx->token_index];
-            if (token.kind != COYC_TK_SCOLON) {
-                error(ctx, "TODO return INT [^;]");
-            }
-            ctx->token_index += 1;
-            return false;
-        }
-        else {
-            errorf(ctx, "TODO parser.c:%d", __LINE__);
-        }
+        statement_t return_stmt;
+        return_stmt.return_.type = return_;
+        return_stmt.return_.value = parse_expression(ctx, 1);
+        arrput(function->statements, return_stmt);
     }
     else {
         errorf(ctx, "TODO parse function instruction %s", coyc_token_kind_tostr_DBG(token.kind));
@@ -119,10 +154,11 @@ static bool parse_instruction(coyc_pctx_t *ctx, function_t *function)
 /// token_index must mark the first token after the LPAREN
 static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
 {
-    function_t function;
-    function.instructions = NULL;
-    function.name = ident;
-    function.return_type = type;
+    decl_t decl;
+    decl.function.base.type = function;
+    decl.function.base.name = ident;
+    decl.function.statements = NULL;
+    decl.function.return_type = type;
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind != COYC_TK_RPAREN) {
         error(ctx, "TODO support parsing parameter list");
@@ -134,9 +170,9 @@ static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
     }
     ctx->token_index += 1;
 
-    while (!parse_instruction(ctx, &function));
-
-    arrput(ctx->root->functions, function);
+    while (!parse_statement(ctx, &decl.function));
+    
+    arrput(ctx->root->decls, decl);
 }
 
 static void parse_decl(coyc_pctx_t *ctx)
@@ -175,12 +211,11 @@ void coyc_parse(coyc_pctx_t *ctx)
     if (!ctx) return;
     coyc_lexer_t *lexer = ctx->lexer;
     if (!lexer) return;
-    root_node_t *root = ctx->root;
+    ast_root_t *root = ctx->root;
     if (!root) return;
 
-    root->imports = NULL;
+    root->decls = NULL;
     root->module_name = NULL;
-    root->functions = NULL;
 
     ctx->err_msg = NULL;
     ctx->root = root;
@@ -224,18 +259,18 @@ void coyc_tree_free(coyc_pctx_t *ctx)
             free(ctx->root->module_name);
             ctx->root->module_name = NULL;
         }
-        if (ctx->root->functions) {
-            for (int i = 0; i < arrlen(ctx->root->functions); i++) {
-                function_t *func = &ctx->root->functions[i];
-                if (func->name) {
-                    free(func->name);
-                    func->name = NULL;
-                }
-                if (func->instructions) {
-                    arrfree(func->instructions);
+        if (ctx->root->decls) {
+            for (int i = 0; i < arrlen(ctx->root->decls); i++) {
+                decl_t *decl = &ctx->root->decls[i];
+                free(decl->base.name);
+                decl->base.name = NULL;
+                if (decl->base.type == function) {
+                    if (decl->function.statements) {
+                        arrfree(decl->function.statements);
+                    }
                 }
             }
-            arrfree(ctx->root->functions);
+            arrfree(ctx->root->decls);
         }
     }
 }

@@ -76,7 +76,7 @@ static void test_dumpstr_escaped_(char* buf, const char* str, int len)
 static char* test_dumpstr_escaped_alloc_(const char* str, int len)
 {
     if(len < 0) len = str ? strlen(str) : sizeof("<null>") - 1;
-    char* buf = malloc(len + 1);
+    char* buf = malloc(4 * len + 7);
     test_dumpstr_escaped_(buf, str, len);
     return buf;
 }
