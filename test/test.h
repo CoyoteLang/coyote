@@ -82,6 +82,9 @@ static char* test_dumpstr_escaped_alloc_(const char* str, int len)
 }
 static void test_handle_result_(void)
 {
+    // ensure test results are flushed first
+    fflush(stdout);
+    fflush(stderr);
     const char* bcolor;
     const char* dcolor;
     const char* word;
@@ -109,6 +112,8 @@ static void test_handle_result_(void)
         if(TEST_results.error[i-1] != '\n')
             putchar('\n');
     }
+    fflush(stdout);
+    fflush(stderr);
 }
 static int test_report_(void)
 {
