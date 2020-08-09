@@ -1,9 +1,8 @@
 /usr/lib/llvm/10/bin/clang
--std=c99
+-std=c11
 -Ilib
 -Isrc
 -Wall
 -Wextra
 -pedantic
--D_XOPEN_SOURCE=500
 
