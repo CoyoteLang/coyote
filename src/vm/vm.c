@@ -331,6 +331,7 @@ void coy_thread_pop_frame_(coy_thread_t* thread)
     struct coy_stack_segment_* seg = thread->top;
     size_t nframes = stbds_arrlenu(seg->frames);
     assert(nframes);
+    stbds_arrsetlen(seg->frames, nframes - 1);
     if(nframes == 1 && seg->parent)    // if we had 1 frame earlier, then the entire stack segment can be destroyed
         thread->top = seg->parent;
 }
@@ -396,13 +397,16 @@ void coy_thread_exec_frame_(coy_thread_t* thread)
             coy_thread_pop_frame_(thread);
             continue;
         }
-        for(;;) // execute function; this loop is optional, but is done as an optimization
+        size_t nframes = stbds_arrlenu(seg->frames);
+        do // execute function; this loop is optional, but is done as an optimization
         {
             const union coy_instruction_* instr = &func->u.coy.instrs[frame->pc];
+            frame->pc += 1U + instr->op.nargs;
             coy_op_handler_* h = coy_op_handlers_[instr->op.code];
             assert(h && "Invalid instruction"); // for now, we trust the bytecode
             h(thread, seg, frame, instr, frame->bp + frame->pc - func->blocks[frame->block].offset);
         }
+        while(stbds_arrlenu(seg->frames) == nframes);
     }
 }
 
@@ -458,6 +462,8 @@ void vm_test_basicDBG(void)
     coy_push_uint(thread, 5);
     coy_push_uint(thread, 7);
     coy_thread_exec_frame_(thread);
+
+    printf("RESULT: %u\n", thread->top->regs[0].u32);
 
     //coy_vm_deinit(&vm);   //< not yet implemented
 }

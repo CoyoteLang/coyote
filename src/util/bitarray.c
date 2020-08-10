@@ -35,7 +35,10 @@ void coy_bitarray_setlen(coy_bitarray_t* bitarr, size_t nlen)
     size_t plen_elems = stbds_arrlenu(bitarr->data);
     size_t nlen_elems = (nlen + COY_BITARRAY_BITS_PER_ELEMENT - 1) / COY_BITARRAY_BITS_PER_ELEMENT;
     if(plen_elems == nlen_elems)    // early exit
+    {
+        bitarr->len = nlen;
         return;
+    }
     stbds_arrsetlen(bitarr->data, nlen_elems);
     if(nlen_elems > plen_elems)
         memset(&bitarr->data[plen_elems], 0, (nlen_elems - plen_elems) * sizeof(size_t));
