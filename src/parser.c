@@ -153,7 +153,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
         ctx->token_index += 1;
         expression_t *rhs = parse_expression(ctx, next_prec);
-        if (expr->rhs.type == none && rhs->rhs.type == none && rhs->op.kind == COYC_TK_SCOLON && expr->lhs.type == literal && rhs->lhs.type == literal) {
+        if (expr->rhs.type == none && rhs->rhs.type == none && expr->lhs.type == literal && rhs->lhs.type == literal) {
             switch (expr->op.kind) {
                 case COYC_TK_OPADD:
                     // TODO types
