@@ -2,6 +2,7 @@
 #include "stb_ds.h"
 
 #include <assert.h>
+#include <limits.h>
 
 coy_bitarray_t* coy_bitarray_init(coy_bitarray_t* bitarr)
 {
