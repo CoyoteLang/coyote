@@ -37,9 +37,7 @@ coy_noreturn void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
     longjmp(ctx->err_env, 255);
 }
 
-coy_noreturn void error(coyc_pctx_t *ctx, const char *msg) {
-    errorf(ctx, "%s", msg);
-}
+#define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
 
 coy_noreturn void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
     char buf[128];
@@ -64,32 +62,32 @@ type_t coyc_type(coyc_token_t token) {
 static void parse_module(coyc_pctx_t *ctx)
 {
     if (ctx->tokens[0].kind != COYC_TK_MODULE) {
-        error(ctx, "Missing a module statement!");
+        ERROR("Missing a module statement!");
     }
     
     if (ctx->root->module_name) {
-        error(ctx, "Invalid `module` statement found!");
+        ERROR("Invalid `module` statement found!");
     }
 
     if (ctx->tokens[1].kind != COYC_TK_IDENT) {
-        error(ctx, "Expected identifier for module name!");
+        ERROR("Expected identifier for module name!");
     }
 
     ctx->root->module_name = coyc_token_read(ctx->tokens[1]);
 
     if (ctx->tokens[2].kind != COYC_TK_SCOLON) {
-        error(ctx, "Expected semicolon after module statement!");
+        ERROR("Expected semicolon after module statement!");
     }
     ctx->token_index = 3;
 }
 
 static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_prec) {
     if (ctx->token_index > arrlenu(ctx->tokens)) {
-        error(ctx, "Unexpected EOF!");
+        ERROR("Unexpected EOF!");
     }
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind == COYC_TK_LPAREN) {
-        error(ctx, "TODO parens");
+        ERROR("TODO parens");
     }
     if (token.kind == COYC_TK_INTEGER) {
         expression_value_t val;
@@ -100,7 +98,7 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_pr
         ctx->token_index += 1;
         return val;
     }
-    error(ctx, "TODO more atoms");
+    ERROR("TODO more atoms");
     // Not yet used.
     (void)minimum_prec;
 }
@@ -170,7 +168,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
                 case COYC_TK_OPDIV:
                     // TODO types
                     if (rhs->lhs.literal.value.integer.value == 0) {
-                        error(ctx, "Division by zero!");
+                        ERROR("Division by zero!");
                     }
                     expr->lhs.literal.value.integer.value /= rhs->lhs.literal.value.integer.value;
                     break;
@@ -192,10 +190,10 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
 {
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind == COYC_TK_EOF) {
-        error(ctx, "Error: expected '}', found EOF!");
+        ERROR("Error: expected '}', found EOF!");
     }
     if (token.kind == COYC_TK_ERROR) {
-        error(ctx, "Error in lexer while parsing function body!");
+        ERROR("Error in lexer while parsing function body!");
     }
     if (token.kind == COYC_TK_RBRACE) {
         ctx->token_index += 1;
@@ -211,7 +209,7 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
             ctx->token_index += 1;
         }
         else {
-            error(ctx, "Expected semicolon after return statement!");
+            ERROR("Expected semicolon after return statement!");
         }
         arrput(function->statements, return_stmt);
     }
@@ -231,7 +229,7 @@ static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
     decl.function.return_type = type;
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind != COYC_TK_RPAREN) {
-        error(ctx, "TODO support parsing parameter list");
+        ERROR("TODO support parsing parameter list");
     }
     ctx->token_index += 1;
     token = ctx->tokens[ctx->token_index];
