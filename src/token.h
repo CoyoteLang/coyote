@@ -20,6 +20,7 @@ typedef struct coy_source_range
     ITEM(OPSUB),            \
     ITEM(OPADD),            \
     ITEM(OPDIV),            \
+    ITEM(OPMUL),            \
     \
     ITEM(DOT),              \
     ITEM(COMMA),            \

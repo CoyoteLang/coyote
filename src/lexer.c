@@ -121,6 +121,7 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
         case COYC_LEXER_EOF_: return coyc_lexer_mktoken_(lexer, COYC_TK_EOF, 0);
         case '+': return coyc_lexer_mktoken_(lexer, COYC_TK_OPADD, 1);
         case '-': return coyc_lexer_mktoken_(lexer, COYC_TK_OPSUB, 1);
+        case '*': return coyc_lexer_mktoken_(lexer, COYC_TK_OPMUL, 1);
         case '/':
             c = coyc_lexer_peekc_(lexer, 1);
             switch(c)

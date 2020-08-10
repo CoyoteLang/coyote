@@ -17,7 +17,7 @@ static const char src_lexer_parser[] =
         // "import std.io;\n"
         "int foo()\n"
         "{\n"
-        "    return 3 / 1 - 9 / 3;\n"
+        "    return 2 * 3 / 1 - 24 / 2 / 2;\n"
         "}\n"
 ;
 static size_t count_lines(const char* str, size_t slen)
