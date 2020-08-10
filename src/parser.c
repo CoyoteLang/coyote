@@ -113,8 +113,9 @@ typedef struct {
     enum {left,right} assoc;
 } op_t;
 
-op_t ops[2] = {
+op_t ops[3] = {
    { .token = COYC_TK_OPADD, .prec = 1, .assoc = left },
+   { .token = COYC_TK_OPSUB, .prec = 1, .assoc = left },
    { .token = COYC_TK_OPDIV, .prec = 2, .assoc = left } 
 };
 
@@ -158,6 +159,10 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
                 case COYC_TK_OPADD:
                     // TODO types
                     expr->lhs.literal.value.integer.value += rhs->lhs.literal.value.integer.value;
+                    break;
+                case COYC_TK_OPSUB:
+                    // TODO types
+                    expr->lhs.literal.value.integer.value -= rhs->lhs.literal.value.integer.value;
                     break;
                 case COYC_TK_OPDIV:
                     // TODO types
