@@ -30,9 +30,7 @@ tolerant is extremely important, and a high-priority TODO.
 coy_noreturn void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    int len = vsnprintf(NULL, 0, fmt, args);
-    char *buf = malloc(len + 1);
-    vsprintf(buf, fmt, args);
+    char *buf = coy_vaprintf_(fmt, args);
     va_end(args);
     ctx->err_msg = buf;
     fprintf(stderr, "Parser: %s\n", buf);
