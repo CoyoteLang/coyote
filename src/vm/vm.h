@@ -11,7 +11,7 @@ struct coy_gcobj_;
 #define COY_GC_SET_COMMON_  3
 struct coy_gc_
 {
-    struct coy_gcobj_* sets[3];
+    struct coy_gcobj_** sets[3];
     uint8_t curset : 1;
     uint8_t : 7;
 };

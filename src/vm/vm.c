@@ -5,6 +5,7 @@
 
 #include <stdbool.h>
 #include <stdarg.h>
+#include <limits.h>
 #include <inttypes.h>
 #include <assert.h>
 #include <stdio.h>
@@ -73,14 +74,17 @@ static void coy_gc_mark_(struct coy_gc_* gc, void* ptr)
     gcobj->set = gc->curset;
 
     // we do a move from uset ("unmarked set") to mset ("marked set")
-    struct coy_gcobj_** mset = &gc->sets[gc->curset];
-    struct coy_gcobj_** uset = &gc->sets[!gc->curset];
+    struct coy_gcobj_** mset = gc->sets[gc->curset];
+    struct coy_gcobj_** uset = gc->sets[!gc->curset];
     // remove from `uset` by assigning last item to current (& shortening array by 1)
     stbds_arrdelswap(uset, gcobj->index);
     if(stbds_arrlenu(uset)) uset[gcobj->index]->index = gcobj->index;
     // insert into `mset` by appending at end
     gcobj->index = stbds_arrlenu(mset);
     stbds_arrput(mset, gcobj);
+    // stbds may have changed the ptrs
+    gc->sets[gc->curset] = mset;
+    gc->sets[!gc->curset] = uset;
 
     // recurse, to mark children of this object
     if(gcobj->typeinfo->cb_mark) gcobj->typeinfo->cb_mark(gc, ptr);
@@ -90,7 +94,7 @@ void* coy_gc_malloc_(struct coy_gc_* gc, size_t size, const struct coy_typeinfo_
     char* gcobj = malloc(sizeof(struct coy_gcobj_) + size);
     if(!COY_ENSURE(gcobj, "failed to allocate %" PRIu64 " bytes", (uint64_t)size))
         return NULL;
-    struct coy_gcobj_** putset = &gc->sets[!gc->curset];
+    struct coy_gcobj_** putset = gc->sets[!gc->curset];
     struct coy_gcobj_ g = {
         .typeinfo = typeinfo,
         .index = stbds_arrlenu(putset),
@@ -98,6 +102,7 @@ void* coy_gc_malloc_(struct coy_gc_* gc, size_t size, const struct coy_typeinfo_
     };
     memcpy(gcobj, &g, sizeof(g));
     stbds_arrput(putset, (struct coy_gcobj_*)gcobj);
+    gc->sets[!gc->curset] = putset;
     return gcobj + sizeof(g);
 }
 
