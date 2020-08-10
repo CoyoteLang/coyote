@@ -10,6 +10,8 @@
 #include <assert.h>
 #include <stdio.h>
 
+#define COY_OP_TRACE_   1
+
 // this can grow, so we can be a bit conservative
 #define COY_THREAD_INITIAL_STACK_REG_SIZE_      2048
 #define COY_THREAD_INITIAL_STACK_FRAME_SIZE_    16
@@ -246,11 +248,30 @@ struct coy_refval_vtbl_
     struct coy_variable_entry_* variables;      // hash table
 };
 
+#define COY_ENUM_instruction_opcode_(ITEM,VAL,VLAST)    \
+    ITEM(ADD),              \
+    ITEM(RET),              \
+    ITEM(_DUMPU32)VAL(0xF0) \
+    VLAST(0xFF)
+
 enum coy_instruction_opcode_
 {
-    COY_OPCODE_ADD,
-    COY_OPCODE_RET,
+#define COY_ITEM_(NAME)    COY_OPCODE_##NAME
+#define COY_VAL_(V)        = (V)
+#define COY_VLAST_(V)      ,COY_OPCODE_LAST_ = (V)
+    COY_ENUM_instruction_opcode_(COY_ITEM_,COY_VAL_,COY_VLAST_)
+#undef COY_ITEM_
+#undef COY_VAL_
+#undef COY_VLAST_
 };
+
+static const char* const coy_instruction_opcode_names_[256] = {
+#define COY_ITEM_(NAME)    [COY_OPCODE_##NAME] = #NAME
+#define COY_VAL_(V)
+#define COY_VLAST_(V)
+    COY_ENUM_instruction_opcode_(COY_ITEM_,COY_VAL_,COY_VLAST_)
+};
+
 // type
 #define COY_OPFLG_SIGNED    0x00
 #define COY_OPFLG_FLOAT     0x40
@@ -373,11 +394,23 @@ static void coy_op_handle_ret_(coy_thread_t* thread, struct coy_stack_segment_* 
     }
     coy_thread_pop_frame_(thread);
 }
+static void coy_op_handle__dumpu32_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    // we don't generally want unconditional colors (because of file output), but eh
+    printf("\033[35m*** [$%" PRIu32 "]__dumpu32:", dstreg);
+    for(size_t i = 1; i <= instr->op.nargs; i++)
+    {
+        size_t r = frame->fp + instr[i].arg.index;
+        printf(" $%" PRIu32 "=%" PRIu32, instr[i].arg.index, seg->regs[r].u32);
+    }
+    printf("\033[0m\n");
+}
 
 typedef void coy_op_handler_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg);
 static coy_op_handler_* const coy_op_handlers_[256] = {
     [COY_OPCODE_ADD] = coy_op_handle_add_,
     [COY_OPCODE_RET] = coy_op_handle_ret_,
+    [COY_OPCODE__DUMPU32] = coy_op_handle__dumpu32_,
 };
 
 // runs a frame until it exits
@@ -403,13 +436,44 @@ void coy_thread_exec_frame_(coy_thread_t* thread)
             continue;
         }
         size_t nframes = stbds_arrlenu(seg->frames);
+#if COY_OP_TRACE_
+        printf("@function:%p (%" PRIu32 " params)\n", (void*)func, func->blocks[0].nparams);
+        uint32_t pblock = UINT32_MAX;
+#endif
         do // execute function; this loop is optional, but is done as an optimization
         {
             const union coy_instruction_* instr = &func->u.coy.instrs[frame->pc];
+#if COY_OP_TRACE_
+            {
+                if(pblock != frame->block)
+                {
+                    pblock = frame->block;
+                    printf(".block%" PRIu32 " (", pblock);
+                    for(uint32_t i = 0; i < func->blocks[frame->block].nparams; i++)
+                    {
+                        if(i) putchar(' ');
+                        printf("$%" PRIu32 "=%" PRIu32, i, seg->regs[frame->fp+i].u32);
+                    }
+                    printf(")\n");
+                }
+                const char* name = coy_instruction_opcode_names_[instr->op.code];
+                if(!name) name = "<?>";
+                printf("\t$%u = %s", (unsigned)((frame->bp - frame->fp) + frame->pc), name);
+                for(size_t i = 1; i <= instr->op.nargs; i++)
+                {
+                    printf(" $%" PRIu32, instr[i].arg.index);
+                }
+                printf("\n");
+            }
+#endif
+            uint32_t dstreg = frame->bp + frame->pc - func->blocks[frame->block].offset;
             frame->pc += 1U + instr->op.nargs;
             coy_op_handler_* h = coy_op_handlers_[instr->op.code];
             assert(h && "Invalid instruction"); // for now, we trust the bytecode
-            h(thread, seg, frame, instr, frame->bp + frame->pc - func->blocks[frame->block].offset);
+            h(thread, seg, frame, instr, dstreg);
+#if COY_OP_TRACE_
+            printf("\t\tR:=%" PRIu32 "\n", seg->regs[dstreg].u32);
+#endif
         }
         while(stbds_arrlenu(seg->frames) == nframes);
     }
@@ -448,6 +512,10 @@ void vm_test_basicDBG(void)
         /*2*/   {.op={COY_OPCODE_ADD, COY_OPFLG_TYPE_UINT32, 0, 2}},
         /*3*/   {.arg={0,0}},
         /*4*/   {.arg={1,0}},
+        /*-*/   {.op={COY_OPCODE__DUMPU32, 0, 0, 3}},
+        /*-*/   {.arg={0,0}},
+        /*-*/   {.arg={1,0}},
+        /*-*/   {.arg={2,0}},
         /*5*/   {.op={COY_OPCODE_RET, 0, 0, 1}},
         /*6*/   {.arg={2,0}},
     };
@@ -468,7 +536,7 @@ void vm_test_basicDBG(void)
     coy_push_uint(thread, 7);
     coy_thread_exec_frame_(thread);
 
-    printf("RESULT: %u\n", thread->top->regs[0].u32);
+    printf("RESULT: %" PRIu32 "\n", thread->top->regs[0].u32);
 
     //coy_vm_deinit(&vm);   //< not yet implemented
 }
