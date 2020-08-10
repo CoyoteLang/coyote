@@ -113,8 +113,9 @@ typedef struct {
     enum {left,right} assoc;
 } op_t;
 
-op_t ops[1] = {
-   { .token = COYC_TK_OPADD, .prec = 1, .assoc = left } 
+op_t ops[2] = {
+   { .token = COYC_TK_OPADD, .prec = 1, .assoc = left },
+   { .token = COYC_TK_OPDIV, .prec = 2, .assoc = left } 
 };
 
 static op_t *find_op(coyc_token_t token) {
@@ -152,13 +153,27 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
         ctx->token_index += 1;
         expression_t *rhs = parse_expression(ctx, next_prec);
-        if (expr->rhs.type == none && rhs->rhs.type == none && rhs->op.kind == COYC_TK_SCOLON && expr->op.kind == COYC_TK_OPADD && expr->lhs.type == literal && rhs->lhs.type == literal) {
-            // TODO types
-            expr->lhs.literal.value.integer.value += rhs->lhs.literal.value.integer.value;
+        if (expr->rhs.type == none && rhs->rhs.type == none && rhs->op.kind == COYC_TK_SCOLON && expr->lhs.type == literal && rhs->lhs.type == literal) {
+            switch (expr->op.kind) {
+                case COYC_TK_OPADD:
+                    // TODO types
+                    expr->lhs.literal.value.integer.value += rhs->lhs.literal.value.integer.value;
+                    break;
+                case COYC_TK_OPDIV:
+                    // TODO types
+                    if (rhs->lhs.literal.value.integer.value == 0) {
+                        error(ctx, "Division by zero!");
+                    }
+                    expr->lhs.literal.value.integer.value /= rhs->lhs.literal.value.integer.value;
+                    break;
+                default:
+                    goto runtime_expr;
+            }
             expr->op = rhs->op;
             expression_free(rhs);
         }
         else {
+            runtime_expr:
             *((volatile int*)NULL) = 0;
         }
     }
@@ -184,8 +199,12 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
         statement_t return_stmt;
         return_stmt.return_.type = return_;
         return_stmt.return_.value = parse_expression(ctx, 1);
-        // Skip the semicolon
-        ctx->token_index += 1;
+        if (ctx->tokens[ctx->token_index].kind == COYC_TK_SCOLON) {
+            ctx->token_index += 1;
+        }
+        else {
+            error(ctx, "Expected semicolon after return statement!");
+        }
         arrput(function->statements, return_stmt);
     }
     else {
