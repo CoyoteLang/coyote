@@ -8,9 +8,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-// a simple assert won't do, because those are disableable
-#define CHECK(x)    do { if(!(x)) { fprintf(stderr, "\x1b[31mTest failed: %s\x1b[0m\n", #x); failures += 1; } else { printf("\x1b[32mTest '%s' passed.\n\x1b[0m", #x); } } while(0)
-
 static const char src_lexer_parser[] =
         "module test;\n"
         // Need to decide how these are handled internally first.
