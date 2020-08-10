@@ -119,6 +119,7 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
         switch(c)
         {
         case COYC_LEXER_EOF_: return coyc_lexer_mktoken_(lexer, COYC_TK_EOF, 0);
+        case '+': return coyc_lexer_mktoken_(lexer, COYC_TK_OPADD, 1);
         case '/':
             c = coyc_lexer_peekc_(lexer, 1);
             switch(c)
@@ -207,7 +208,7 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
                 lexer->token.kind = COYC_TK_RETURN;
             return lexer->token;
         default:
-            fprintf(stderr, "lexer error near '%c' (\\x%.2X)\n", c, c);
+            fprintf(stderr, "\nlexer error near '%c' (\\x%.2X)\n", c, c);
             abort();
             break;
         }

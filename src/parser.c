@@ -107,20 +107,61 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_pr
     (void)minimum_prec;
 }
 
+typedef struct {
+    coyc_token_kind_t token;
+    unsigned prec;
+    enum {left,right} assoc;
+} op_t;
+
+op_t ops[1] = {
+   { .token = COYC_TK_OPADD, .prec = 1, .assoc = left } 
+};
+
+static op_t *find_op(coyc_token_t token) {
+    for (size_t i = 0; i < sizeof(ops) / sizeof(op_t); i += 1) {
+        if (ops[i].token == token.kind) {
+            return ops + i;
+        }
+    }
+    return NULL;
+}
+
+static void expression_free(expression_t *expression) {
+    free(expression);
+}
+
 static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec) {
     (void)minimum_prec;
     expression_t *expr = malloc(sizeof(expression_t));
     expr->lhs = compute_atom(ctx, minimum_prec);
-    coyc_token_t token = ctx->tokens[ctx->token_index];
-    if (token.kind == COYC_TK_SCOLON) {
-        ctx->token_index += 1;
-        expr->rhs.type = none;
+    expr->rhs.type = none;
+    // TODO
+    expr->type = expr->lhs.literal.value.integer.type;
+    while (true) {
+        coyc_token_t token = ctx->tokens[ctx->token_index];
         expr->op = token;
-        // TODO
-        expr->type = expr->lhs.literal.value.integer.type;
-        return expr;
+        if (token.kind == COYC_TK_SCOLON) {
+            expr->op = token;
+            return expr;
+        }
+        const op_t *op = find_op(token);
+        if (op == NULL || op->prec < minimum_prec) {
+            // Done
+            return expr;
+        }
+        const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
+        ctx->token_index += 1;
+        expression_t *rhs = parse_expression(ctx, next_prec);
+        if (expr->rhs.type == none && rhs->rhs.type == none && rhs->op.kind == COYC_TK_SCOLON && expr->op.kind == COYC_TK_OPADD && expr->lhs.type == literal && rhs->lhs.type == literal) {
+            // TODO types
+            expr->lhs.literal.value.integer.value += rhs->lhs.literal.value.integer.value;
+            expr->op = rhs->op;
+            expression_free(rhs);
+        }
+        else {
+            *((volatile int*)NULL) = 0;
+        }
     }
-    error(ctx, "TODO");
 }
 
 // Returns true if there's no more instructions
@@ -143,10 +184,12 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
         statement_t return_stmt;
         return_stmt.return_.type = return_;
         return_stmt.return_.value = parse_expression(ctx, 1);
+        // Skip the semicolon
+        ctx->token_index += 1;
         arrput(function->statements, return_stmt);
     }
     else {
-        errorf(ctx, "TODO parse function instruction %s", coyc_token_kind_tostr_DBG(token.kind));
+        errorf(ctx, "TODO parse statement %s", coyc_token_kind_tostr_DBG(token.kind));
     }
     return false;
 }
