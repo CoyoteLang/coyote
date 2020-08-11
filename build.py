@@ -195,7 +195,7 @@ def emit_target(tgt, emitted=None):
 '''.format(**params))
     for a in artifacts:
         t.append('''\
-{t_artifact}: $({t_name}_OBJECTS) $({t_name}_HEADERS){dep_depends}
+{t_artifact}: $({t_name}_OBJECTS) {dep_depends}
 \t$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 '''.format(**params, t_artifact=a))
 
