@@ -31,8 +31,6 @@ typedef struct coy_thread
     struct coy_stack_segment_* top; //< top (current) stack segment
 } coy_thread_t;
 
-typedef int32_t coy_c_function_t(coy_thread_t* thread);
-
 struct coy_module_entry_;
 
 // A VM is a shared context that stores immutable data such as code.

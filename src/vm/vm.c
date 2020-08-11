@@ -1,4 +1,5 @@
 #include "vm.h"
+#include "bytecode.h"
 #include "stb_ds.h"
 
 #include "../util/bitarray.h"
@@ -292,50 +293,6 @@ static const char* const coy_instruction_opcode_names_[256] = {
 #define COY_OPFLG_TYPE_UINT32   (COY_OPFLG_UNSIGNED | COY_OPFLG_32BIT)
 
 #define COY_OPFLG_TYPE_MASK     (0xC0 | 0x30)
-
-union coy_instruction_
-{
-    struct
-    {
-        uint8_t code;
-        uint8_t flags;
-        uint8_t _reserved;  // eventually: VM register?
-        uint8_t nargs;
-    } op;
-    struct
-    {
-        uint32_t index: 24;
-        uint32_t _reserved : 8; // eventually: VM register?
-    } arg;
-    uint32_t raw;
-};
-
-// This can eventually be merged with `instrs`, to avoid multiple allocations.
-struct coy_function_block_
-{
-    uint32_t nparams;   //< # of a parameters in a block
-    uint32_t offset;    //< block's starting offset
-};
-
-struct coy_function_
-{
-    struct coy_function_block_* blocks;    // NULL for native functions
-    union
-    {
-        struct
-        {
-            union coy_instruction_* instrs;
-            uint32_t maxregs;   //< max # of registers used; same as max(block.nparams + block.size - 1)
-        } coy;
-        coy_c_function_t* cfunc;
-    } u;
-};
-
-struct coy_module_
-{
-    const struct coy_refval_vtbl_* vtbl;
-    union coy_register_* variables;
-};
 
 void coy_thread_create_frame_(coy_thread_t* thread, struct coy_function_* function, uint32_t nparams, bool segmented)
 {
