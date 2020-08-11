@@ -68,10 +68,16 @@ typedef union {
     } return_;
 } statement_t;
 
+typedef struct {
+    type_t type;
+    char *name;
+} parameter_t;
+
 typedef struct function {
     decl_base_t base;
     type_t return_type;
     statement_t *statements;
+    parameter_t *parameters;
 } function_t;
 
 typedef struct import {

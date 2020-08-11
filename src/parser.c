@@ -281,10 +281,29 @@ static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
     decl.function.base.type = function;
     decl.function.base.name = ident;
     decl.function.statements = NULL;
+    decl.function.parameters = NULL;
     decl.function.return_type = type;
     coyc_token_t token = ctx->tokens[ctx->token_index];
+    while (token.kind == COYC_TK_TYPE) {
+        type_t type = coyc_type(token);
+        if (type.primitive == invalid) {
+            error_token(ctx, token, "TODO parse type %s");
+        }
+        ctx->token_index += 1;
+        token = ctx->tokens[ctx->token_index];
+        if (token.kind != COYC_TK_IDENT) {
+            errorf(ctx, "Expected identifier, found %s", coyc_token_kind_tostr_DBG(token.kind));
+        }
+        char *name = coyc_token_read(token);
+        parameter_t param;
+        param.type = type;
+        param.name = name;
+        arrput(decl.function.parameters, param);
+        ctx->token_index += 1;
+        token = ctx->tokens[ctx->token_index];
+    }
     if (token.kind != COYC_TK_RPAREN) {
-        ERROR("TODO support parsing parameter list");
+        ERROR("Expected ')' to end function parameter list!");
     }
     ctx->token_index += 1;
     token = ctx->tokens[ctx->token_index];
