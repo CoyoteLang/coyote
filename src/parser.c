@@ -284,7 +284,20 @@ static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
     decl.function.parameters = NULL;
     decl.function.return_type = type;
     coyc_token_t token = ctx->tokens[ctx->token_index];
-    while (token.kind == COYC_TK_TYPE) {
+    while (token.kind == COYC_TK_TYPE || token.kind == COYC_TK_COMMA) {
+        coyc_token_kind_t expected = arrlenu(decl.function.parameters) == 0 ? COYC_TK_TYPE : COYC_TK_COMMA;
+        if (token.kind != expected) {
+            if (token.kind == COYC_TK_COMMA) {
+                ERROR("Expected type in param list, found comma!");
+            }
+            else {
+                ERROR("Expected comma to separate parameters in param list!");
+            }
+        }
+        if (token.kind == COYC_TK_COMMA) {
+            ctx->token_index += 1;
+            token = ctx->tokens[ctx->token_index];
+        }
         type_t type = coyc_type(token);
         if (type.primitive == invalid) {
             error_token(ctx, token, "TODO parse type %s");
