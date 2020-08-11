@@ -14,7 +14,7 @@ static const char src_lexer_parser[] =
         // "import std.io;\n"
         "int foo()\n"
         "{\n"
-        "    return 2 * 3 / 1 - 24 / 2 / 2;\n"
+        "    return (2 * 3) / 1 - 24 / 2 / 2;\n"
         "}\n"
 ;
 static size_t count_lines(const char* str, size_t slen)
@@ -104,7 +104,7 @@ TEST(parser)
     ASSERT(stmt.return_.value);
     ASSERT_EQ_INT(stmt.return_.value->lhs.type, literal);
     ASSERT(stmt.return_.value->lhs.type == literal);
-    ASSERT_EQ_INT(stmt.return_.value->op.kind, COYC_TK_SCOLON);
+    // If rhs.type is none, the value is just the lhs, and op is 
     ASSERT_EQ_INT(stmt.return_.value->rhs.type, none);
     ASSERT_EQ_INT(stmt.return_.value->type.primitive, uint);
     ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.primitive, uint);

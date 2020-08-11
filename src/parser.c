@@ -81,13 +81,25 @@ static void parse_module(coyc_pctx_t *ctx)
     ctx->token_index = 3;
 }
 
+static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec);
+
 static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_prec) {
     if (ctx->token_index > arrlenu(ctx->tokens)) {
         ERROR("Unexpected EOF!");
     }
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind == COYC_TK_LPAREN) {
-        ERROR("TODO parens");
+        ctx->token_index += 1;
+        expression_value_t val;
+        val.expression.type = expression;
+        val.expression.expression = parse_expression(ctx, 1);
+        if (ctx->tokens[ctx->token_index].kind != COYC_TK_RPAREN) {
+            ERROR("Missing right parentheses");            
+        }
+        else {
+            ctx->token_index += 1;
+        }
+        return val;
     }
     if (token.kind == COYC_TK_INTEGER) {
         expression_value_t val;
@@ -129,6 +141,62 @@ static void expression_free(expression_t *expression) {
     free(expression);
 }
 
+static void reduce(coyc_pctx_t *ctx, expression_t *expr);
+/// Reduces expressions contained within values. This
+/// modifies `val` in-place, which is why it requires
+/// a pointer.
+/// Might free `val`.
+static void expr_reduce_val(coyc_pctx_t *ctx, expression_value_t *val) {
+    reduce(ctx, val->expression.expression);
+    if (val->expression.expression->rhs.type == none) {
+        // Only the LHS matters; the op must be a terminator
+        // TODO: assertion
+        expression_value_t lhs = val->expression.expression->lhs;
+        expression_free(val->expression.expression);
+        *val = lhs;
+    }
+}
+
+static bool isComptime(coyc_token_kind_t op) {
+    return op == COYC_TK_OPMUL || op == COYC_TK_OPADD || op == COYC_TK_OPDIV || op == COYC_TK_OPSUB;
+}
+
+static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
+    if (expr->lhs.type == expression) {
+        expr_reduce_val(ctx, &expr->lhs);
+    }
+    if (expr->rhs.type == expression) {
+        expr_reduce_val(ctx, &expr->rhs);
+    }
+    if (expr->lhs.type == literal && expr->rhs.type == literal && isComptime(expr->op.kind)) {
+        switch (expr->op.kind) {
+            case COYC_TK_OPADD:
+                // TODO types
+                expr->lhs.literal.value.integer.value += expr->rhs.literal.value.integer.value;
+                break;
+            case COYC_TK_OPSUB:
+                // TODO types
+                expr->lhs.literal.value.integer.value -= expr->rhs.literal.value.integer.value;
+                break;
+            case COYC_TK_OPMUL:
+                // TODO types
+                expr->lhs.literal.value.integer.value *= expr->rhs.literal.value.integer.value;
+                break;
+            case COYC_TK_OPDIV:
+                // TODO types
+                if (expr->rhs.literal.value.integer.value == 0) {
+                    ERROR("Division by zero!");
+                }
+                expr->lhs.literal.value.integer.value /= expr->rhs.literal.value.integer.value;
+                break;
+            default:
+                ERROR("UNREACHABLE");
+            }
+            expr->type = expr->lhs.literal.value.integer.type;
+        }
+        expr->rhs.type = none;
+}
+
 static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec) {
     (void)minimum_prec;
     expression_t *expr = malloc(sizeof(expression_t));
@@ -138,9 +206,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
     expr->type = expr->lhs.literal.value.integer.type;
     while (true) {
         coyc_token_t token = ctx->tokens[ctx->token_index];
-        expr->op = token;
         if (token.kind == COYC_TK_SCOLON) {
-            expr->op = token;
             return expr;
         }
         const op_t *op = find_op(token);
@@ -148,40 +214,23 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
             // Done
             return expr;
         }
+        if (expr->rhs.type != none) {
+            expression_t *subexpr = expr;
+            expr = malloc(sizeof(expression_t));
+            expr->lhs.expression.type = expression;
+            expr->lhs.expression.expression = subexpr;
+            expr->rhs.type = none;
+        }
+        expr->op = token;
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
         ctx->token_index += 1;
         expression_t *rhs = parse_expression(ctx, next_prec);
-        if (expr->rhs.type == none && rhs->rhs.type == none && expr->lhs.type == literal && rhs->lhs.type == literal) {
-            switch (expr->op.kind) {
-                case COYC_TK_OPADD:
-                    // TODO types
-                    expr->lhs.literal.value.integer.value += rhs->lhs.literal.value.integer.value;
-                    break;
-                case COYC_TK_OPSUB:
-                    // TODO types
-                    expr->lhs.literal.value.integer.value -= rhs->lhs.literal.value.integer.value;
-                    break;
-                case COYC_TK_OPMUL:
-                    // TODO types
-                    expr->lhs.literal.value.integer.value *= rhs->lhs.literal.value.integer.value;
-                    break;
-                case COYC_TK_OPDIV:
-                    // TODO types
-                    if (rhs->lhs.literal.value.integer.value == 0) {
-                        ERROR("Division by zero!");
-                    }
-                    expr->lhs.literal.value.integer.value /= rhs->lhs.literal.value.integer.value;
-                    break;
-                default:
-                    goto runtime_expr;
-            }
-            expr->op = rhs->op;
-            expression_free(rhs);
+        if (expr->rhs.type != none) {
+            ERROR("UNREACHABLE");
         }
-        else {
-            runtime_expr:
-            *((volatile int*)NULL) = 0;
-        }
+        expr->rhs.expression.type = expression;
+        expr->rhs.expression.expression = rhs;
+        reduce(ctx, expr);
     }
 }
 
