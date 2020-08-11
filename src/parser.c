@@ -7,6 +7,7 @@ tolerant is extremely important, and a high-priority TODO.
 
 #include "ast.h"
 #include "util/string.h"
+#include "util/hints.h"
 #include "stb_ds.h"
 
 #include <inttypes.h>
@@ -17,17 +18,7 @@ tolerant is extremely important, and a high-priority TODO.
 #include <stdlib.h>
 #include <string.h>
 
-#ifdef noreturn
-#define coy_noreturn noreturn
-#elif __STDC_VERSION__ >= 201112L
-#define coy_noreturn _Noreturn
-#elif __GNUC__ 
-#define coy_noreturn __attribute__ ((noreturn))
-#else
-#define coy_noreturn 
-#endif
-
-coy_noreturn void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
+static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     char *buf = coy_vaprintf_(fmt, args);
@@ -39,7 +30,7 @@ coy_noreturn void errorf(coyc_pctx_t *ctx, const char *fmt, ...) {
 
 #define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
 
-coy_noreturn void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
+static COY_HINT_NORETURN void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
     char buf[128];
     size_t len = token.len < 128 ? token.len : 127;
     strncpy(buf, token.ptr, len);
@@ -50,7 +41,7 @@ coy_noreturn void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *
     errorf(ctx, fmt, buf);
 }
 
-type_t coyc_type(coyc_token_t token) {
+static type_t coyc_type(coyc_token_t token) {
     type_t type;
     type.primitive = invalid;
     if (strncmp(token.ptr, "int", token.len) == 0) {

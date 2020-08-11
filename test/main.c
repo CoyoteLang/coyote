@@ -1,6 +1,10 @@
 #include "lexer.h"
 #include "ast.h"
+#include "semalysis.h"
 #include "stb_ds.h"
+
+// TEMPORARY
+#include "vm/compat_shims.h"
 
 #include "test.h"
 
@@ -122,10 +126,50 @@ TEST(vm_basic)
     vm_test_basicDBG();
 }
 
+TEST(semalysis)
+{ 
+    const char src[] =
+        "module main;"
+        "int foo(int a, int b, int c, int d)\n"
+        "{\n"
+        // 2, 3, 1, 24
+        "    return (((a * b)) / c) - ((d / a) / a);\n"
+        "}\n";
+        // 9 - (8 / 3)
+    coyc_pctx_t pctx;
+    ast_root_t root;
+    coyc_lexer_t lexer;
+    PRECONDITION(coyc_lexer_init(&lexer, "<src>", src, sizeof(src) - 1));
+    pctx.lexer = &lexer;
+    pctx.root = &root;
+    coyc_parse(&pctx);
+    ASSERT_EQ_STR(pctx.err_msg, NULL);
+    coyc_sctx_t *sctx = coyc_semalysis(&root);
+    ASSERT(sctx);
+    ASSERT_EQ_STR(sctx->err_msg, NULL);
+    ASSERT(sctx->module);
+    ASSERT(sctx->module->functions);
+    coy_env_t env;
+    coy_env_init(&env);
+
+    coy_context_t* ctx = coy_context_create(&env);
+    coy_context_push_frame_(ctx, &sctx->module->functions[0], 4, false);
+    coy_push_uint(ctx, 2);
+    coy_push_uint(ctx, 3);
+    coy_push_uint(ctx, 1);
+    coy_push_uint(ctx, 24);
+    coy_vm_exec_frame_(ctx);
+
+    ASSERT_EQ_UINT(ctx->top->regs[0].u32, 0);
+
+    //coy_env_deinit(&env);   //< not yet implemented
+}
+
 int main()
 {
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
     TEST_EXEC(vm_basic);
+    TEST_EXEC(semalysis);
     return TEST_REPORT();
 }
