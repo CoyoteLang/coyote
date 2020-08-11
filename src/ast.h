@@ -40,14 +40,18 @@ typedef union {
 
 typedef union {
     expression_value_type_t type;
-   struct {
-       expression_value_type_t type; 
-       expression_t *expression;
-   } expression;
-   struct {
-       expression_value_type_t type;
-       literal_t value;
-   } literal;
+    struct {
+        expression_value_type_t type; 
+        expression_t *expression;
+    } expression;
+    struct {
+        expression_value_type_t type;
+        literal_t value;
+    } literal;
+    struct {
+        expression_value_type_t type;
+        char *name;
+    } identifier;
 } expression_value_t;
 
 struct expression {

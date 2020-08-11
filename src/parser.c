@@ -110,9 +110,15 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_pr
         ctx->token_index += 1;
         return val;
     }
+    if (token.kind == COYC_TK_IDENT) {
+        expression_value_t val;
+        val.identifier.type = identifier;
+        val.identifier.name = coyc_token_read(token);
+        ctx->token_index += 1;
+        return val;
+    }
     ERROR("TODO more atoms");
     // Not yet used.
-    (void)minimum_prec;
 }
 
 typedef struct {
@@ -193,8 +199,8 @@ static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
                 ERROR("UNREACHABLE");
             }
             expr->type = expr->lhs.literal.value.integer.type;
+            expr->rhs.type = none;
         }
-        expr->rhs.type = none;
 }
 
 static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec) {
