@@ -1,0 +1,44 @@
+module
+    :   declaration*
+
+dotted_ident
+    :   IDENT (DOT IDENT)*
+
+declaration
+    :   nempty_declaration
+    :   SCOLON
+
+nempty_declaration
+    :   MODULE dotted_ident SCOLON
+    :   ...
+
+assign_expression
+    :   expression (OPASSIGN expression)*
+
+single_assign_expression
+    :   expression (OPASSIGN expression)?
+
+expression
+    :   <uses precedence climbing; ends at postfix_expression>
+
+postfix_expression
+    :   expression EXCLAIM
+    :   expression OPINC
+    :   expression LPAREN call_args RPAREN
+    :   expression LARRAY index_args RARRAY
+    :   value
+
+value
+    :   LPAREN assign_expression RPAREN
+    :   INTEGER
+    :   IDENT
+    :   DOLLAR INTEGER?     # used for array slicing, illegal elsewhere (TBD: make $n a *single* token?)
+    :   TYPE    # indeed, there are a few places we'll need it
+
+call_args
+    :   single_assign_expression (COMMA single_assign_expression)* COMMA?
+    :   <epsilon>
+
+index_args
+    :   expression (OPSLICE expression)?
+    :   <epsilon>

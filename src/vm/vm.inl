@@ -1,8 +1,9 @@
 #include "vm.h"
-#include "bytecode.h"
+#include "../bytecode.h"
 #include "stb_ds.h"
 
 #include "../util/bitarray.h"
+#include "../util/debug.h"
 
 #include <stdbool.h>
 #include <stdarg.h>
@@ -16,109 +17,6 @@
 // this can grow, so we can be a bit conservative
 #define COY_THREAD_INITIAL_STACK_REG_SIZE_      2048
 #define COY_THREAD_INITIAL_STACK_FRAME_SIZE_    16
-
-// this will eventually be in its own file
-bool coy_ensure_(bool v, const char* file, int line, const char* format, ...)
-{
-    if(!v)
-    {
-        va_list args;
-        va_start(args, format);
-        fputs("COY_ENSURE failed: ", stderr);
-        vfprintf(stderr, format, args);
-        putc('\n', stderr);
-        va_end(args);
-        assert(false);
-    }
-    return v;
-}
-#define COY_ENSURE(x, ...)  coy_ensure_(!!(x), __FILE__, __LINE__, __VA_ARGS__)
-
-typedef void coy_gc_mark_function_(struct coy_gc_* gc, void* ptr);
-typedef void coy_gc_dtor_function_(struct coy_gc_* gc, void* ptr);
-enum coy_typeinfo_category_
-{
-    COY_TYPEINFO_CAT_INTERNAL_,  //< should never, ever show up in user code
-    COY_TYPEINFO_CAT_NORETURN_,
-    COY_TYPEINFO_CAT_INTEGER_,
-};
-struct coy_typeinfo_
-{
-    enum coy_typeinfo_category_ category;
-    union
-    {
-        const char* internal_name;  // for debugging
-        struct { uint8_t is_signed; uint8_t width; } integer;
-    } u;
-    coy_gc_mark_function_* cb_mark;
-    coy_gc_dtor_function_* cb_dtor;
-};
-
-struct coy_gcobj_
-{
-    const struct coy_typeinfo_* typeinfo;           // type information
-    size_t index : sizeof(size_t) * CHAR_BIT - 2;   //< index in set
-    size_t set : 2;                                 //< active set (2==thread root, 3==common root)
-};
-static struct coy_gc_* coy_gc_init_(struct coy_gc_* gc)
-{
-    if(!gc) return NULL;
-    for(size_t i = 0; i < sizeof(gc->sets) / sizeof(*gc->sets); i++)
-        gc->sets[i] = NULL;
-    gc->curset = 0;
-    return gc;
-}
-static void coy_gc_mark_(struct coy_gc_* gc, void* ptr)
-{
-    if(!ptr) return;    // nothing to mark
-    struct coy_gcobj_* gcobj = (struct coy_gcobj_*)((char*)ptr - sizeof(struct coy_gcobj_));
-    if(gcobj->set >= 2) return; // it's a root or common (means: always marked)
-    if(gcobj->set == gc->curset) return;    // already marked
-    gcobj->set = gc->curset;
-
-    // we do a move from uset ("unmarked set") to mset ("marked set")
-    struct coy_gcobj_** mset = gc->sets[gc->curset];
-    struct coy_gcobj_** uset = gc->sets[!gc->curset];
-    // remove from `uset` by assigning last item to current (& shortening array by 1)
-    stbds_arrdelswap(uset, gcobj->index);
-    if(stbds_arrlenu(uset)) uset[gcobj->index]->index = gcobj->index;
-    // insert into `mset` by appending at end
-    gcobj->index = stbds_arrlenu(mset);
-    stbds_arrput(mset, gcobj);
-    // stbds may have changed the ptrs
-    gc->sets[gc->curset] = mset;
-    gc->sets[!gc->curset] = uset;
-
-    // recurse, to mark children of this object
-    if(gcobj->typeinfo->cb_mark) gcobj->typeinfo->cb_mark(gc, ptr);
-}
-void* coy_gc_malloc_(struct coy_gc_* gc, size_t size, const struct coy_typeinfo_* typeinfo)
-{
-    char* gcobj = malloc(sizeof(struct coy_gcobj_) + size);
-    if(!COY_ENSURE(gcobj, "failed to allocate %" PRIu64 " bytes", (uint64_t)size))
-        return NULL;
-    struct coy_gcobj_** putset = gc->sets[!gc->curset];
-    struct coy_gcobj_ g = {
-        .typeinfo = typeinfo,
-        .index = stbds_arrlenu(putset),
-        .set = !gc->curset,  //< the object begins its life as unmarked
-    };
-    memcpy(gcobj, &g, sizeof(g));
-    stbds_arrput(putset, (struct coy_gcobj_*)gcobj);
-    gc->sets[!gc->curset] = putset;
-    return gcobj + sizeof(g);
-}
-
-// A register is a basic unit of storage.
-union coy_register_
-{
-    int32_t i32;
-    uint32_t u32;
-    int64_t i64;
-    uint64_t u64;
-    double d;
-    void* ptr;
-};
 
 // A frame is a single function context, storing any information necessary for its execution.
 struct coy_frame_
@@ -136,16 +34,6 @@ struct coy_frame_
     struct coy_function_* function;
 };
 
-// A stack segment is a contiguous segment of registers.
-struct coy_stack_segment_
-{
-    struct coy_stack_segment_* parent;
-    coy_bitarray_t pregs;   //< which registers are pointers
-    union coy_register_* regs;
-    // TODO: frames could eventually be merged into `regs`, with a clever use of the stack
-    // (but this is easier for debugging)
-    struct coy_frame_* frames;
-};
 
 // a continuation is a fiber, generator, or similar --- a "slice" of stack that can be resumed
 // TODO: Unused for now, but will replace some uses of coy_stack_segment_ at some point
@@ -207,7 +95,7 @@ coy_vm_t* coy_vm_init(coy_vm_t* vm)
 coy_thread_t* coy_vm_create_thread(coy_vm_t* vm)
 {
     coy_thread_t* thread = malloc(sizeof(coy_thread_t));
-    thread->vm = vm;
+    thread->env = (coy_env_t*)(void*)vm;
     coy_gc_init_(&thread->gc);
     thread->index = stbds_arrlenu(vm->threads.ptr);
     thread->id = vm->threads.next_id++;
@@ -248,51 +136,6 @@ struct coy_refval_vtbl_
     struct coy_typeinfo_** vartypes;
     struct coy_variable_entry_* variables;      // hash table
 };
-
-#define COY_ENUM_instruction_opcode_(ITEM,VAL,VLAST)    \
-    ITEM(ADD),              \
-    ITEM(RET),              \
-    ITEM(_DUMPU32)VAL(0xF0) \
-    VLAST(0xFF)
-
-enum coy_instruction_opcode_
-{
-#define COY_ITEM_(NAME)    COY_OPCODE_##NAME
-#define COY_VAL_(V)        = (V)
-#define COY_VLAST_(V)      ,COY_OPCODE_LAST_ = (V)
-    COY_ENUM_instruction_opcode_(COY_ITEM_,COY_VAL_,COY_VLAST_)
-#undef COY_ITEM_
-#undef COY_VAL_
-#undef COY_VLAST_
-};
-
-static const char* const coy_instruction_opcode_names_[256] = {
-#define COY_ITEM_(NAME)    [COY_OPCODE_##NAME] = #NAME
-#define COY_VAL_(V)
-#define COY_VLAST_(V)
-    COY_ENUM_instruction_opcode_(COY_ITEM_,COY_VAL_,COY_VLAST_)
-};
-
-// type
-#define COY_OPFLG_SIGNED    0x00
-#define COY_OPFLG_FLOAT     0x40
-#define COY_OPFLG_UNSIGNED  0x80
-#define COY_OPFLG_POINTER   0xC0
-// width (non-ptr)
-#define COY_OPFLG_8BIT      0x00
-#define COY_OPFLG_16BIT     0x10
-#define COY_OPFLG_32BIT     0x20
-#define COY_OPFLG_64BIT     0x30
-// subtype (ptr)
-#define COY_OPFLG_REFVAL    0x00    // refval
-#define COY_OPFLG_ARR       0x10    // array
-#define COY_OPFLG_BOXED     0x20    // boxed struct
-#define COY_OPFLG_RESERVED1 0x30    // reserved
-
-#define COY_OPFLG_TYPE_INT32    (COY_OPFLG_SIGNED | COY_OPFLG_32BIT)
-#define COY_OPFLG_TYPE_UINT32   (COY_OPFLG_UNSIGNED | COY_OPFLG_32BIT)
-
-#define COY_OPFLG_TYPE_MASK     (0xC0 | 0x30)
 
 void coy_thread_create_frame_(coy_thread_t* thread, struct coy_function_* function, uint32_t nparams, bool segmented)
 {
@@ -337,6 +180,97 @@ static void coy_op_handle_add_(coy_thread_t* thread, struct coy_stack_segment_* 
         assert(0 && "invalid instruction");
     }
 }
+static void coy_op_handle_sub_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    assert(instr->op.nargs == 2);
+    size_t ra = frame->fp + instr[1].arg.index;
+    size_t rb = frame->fp + instr[2].arg.index;
+    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
+    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
+    coy_bitarray_set(&seg->pregs, dstreg, false);
+    switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
+    {
+    case COY_OPFLG_TYPE_INT32:
+    case COY_OPFLG_TYPE_UINT32:
+        seg->regs[dstreg].u32 = seg->regs[ra].u32 - seg->regs[rb].u32;
+        break;
+    default:
+        assert(0 && "invalid instruction");
+    }
+}
+static void coy_op_handle_mul_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    assert(instr->op.nargs == 2);
+    size_t ra = frame->fp + instr[1].arg.index;
+    size_t rb = frame->fp + instr[2].arg.index;
+    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
+    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
+    coy_bitarray_set(&seg->pregs, dstreg, false);
+    uint32_t a, b, r;
+    switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
+    {
+    case COY_OPFLG_TYPE_INT32:
+        // we do unsigned multiplication to avoid C undefined behavior
+        a = seg->regs[ra].u32;
+        if(a >> 31) a = -a;
+        b = seg->regs[rb].u32;
+        if(b >> 31) b = -b;
+        r = a * b;
+        seg->regs[dstreg].u32 = (seg->regs[ra].i32 < 0) == (seg->regs[rb].i32 < 0) ? r : -r;
+        break;
+    case COY_OPFLG_TYPE_UINT32:
+        seg->regs[dstreg].u32 = seg->regs[ra].u32 * seg->regs[rb].u32;
+        break;
+    default:
+        assert(0 && "invalid instruction");
+    }
+}
+static void coy_op_handle_div_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    assert(instr->op.nargs == 2);
+    size_t ra = frame->fp + instr[1].arg.index;
+    size_t rb = frame->fp + instr[2].arg.index;
+    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
+    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
+    coy_bitarray_set(&seg->pregs, dstreg, false);
+    uint32_t b;
+    switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
+    {
+    case COY_OPFLG_TYPE_INT32:
+        COY_TODO("division of `int`");
+    case COY_OPFLG_TYPE_UINT32:
+        b = seg->regs[rb].u32;
+        if(!b)
+            COY_TODO("handling division by 0");
+        seg->regs[dstreg].u32 = seg->regs[ra].u32 / b;
+        break;
+    default:
+        assert(0 && "invalid instruction");
+    }
+}
+static void coy_op_handle_rem_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    assert(instr->op.nargs == 2);
+    size_t ra = frame->fp + instr[1].arg.index;
+    size_t rb = frame->fp + instr[2].arg.index;
+    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
+    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
+    coy_bitarray_set(&seg->pregs, dstreg, false);
+    uint32_t b;
+    switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
+    {
+    case COY_OPFLG_TYPE_INT32:
+        COY_TODO("remainder of `int`");
+    case COY_OPFLG_TYPE_UINT32:
+        b = seg->regs[rb].u32;
+        if(!b)
+            COY_TODO("handling remainder by 0");
+        seg->regs[dstreg].u32 = seg->regs[ra].u32 % b;
+        break;
+    default:
+        assert(0 && "invalid instruction");
+    }
+}
 static void coy_op_handle_ret_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     assert(instr->op.nargs <= 1);
@@ -366,6 +300,10 @@ static void coy_op_handle__dumpu32_(coy_thread_t* thread, struct coy_stack_segme
 typedef void coy_op_handler_(coy_thread_t* thread, struct coy_stack_segment_* seg, struct coy_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg);
 static coy_op_handler_* const coy_op_handlers_[256] = {
     [COY_OPCODE_ADD] = coy_op_handle_add_,
+    [COY_OPCODE_SUB] = coy_op_handle_sub_,
+    [COY_OPCODE_MUL] = coy_op_handle_mul_,
+    [COY_OPCODE_DIV] = coy_op_handle_div_,
+    [COY_OPCODE_REM] = coy_op_handle_rem_,
     [COY_OPCODE_RET] = coy_op_handle_ret_,
     [COY_OPCODE__DUMPU32] = coy_op_handle__dumpu32_,
 };
@@ -497,3 +435,7 @@ void vm_test_basicDBG(void)
 
     //coy_vm_deinit(&vm);   //< not yet implemented
 }
+
+/*
+4) https://wren.io/embedding/slots-and-handles.html
+*/

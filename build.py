@@ -123,7 +123,8 @@ with SourceLibrary('stb_ds') as stb_ds:
 with Executable('test') as test:
     test.add_sources_glob('src/**/*.c')
     test.add_sources_glob('test/main.c')
-    test.add_headers_glob('src/**/*.h', 'test/**/*.h')
+    test.add_headers_glob('src/**/*.h', 'src/**/*.inl')
+    test.add_headers_glob('test/**/*.h', 'test/**/*.inl')
     test.add_includes('src', 'lib')
     test.add_dependencies('stb_ds')
 

@@ -1,6 +1,10 @@
 #include "lexer.h"
 #include "ast.h"
+#include "semalysis.h"
 #include "stb_ds.h"
+
+// TEMPORARY
+#include "vm/vm.inl"
 
 #include "test.h"
 
@@ -122,10 +126,55 @@ TEST(vm_basic)
     vm_test_basicDBG();
 }
 
+// TODO these are PRIVATE!!!
+void coy_push_uint(coy_thread_t* thread, uint32_t u);
+void coy_thread_create_frame_(coy_thread_t* thread, struct coy_function_* function, uint32_t nparams, bool segmented);
+void coy_thread_exec_frame_(coy_thread_t* thread);
+
+TEST(semalysis)
+{ 
+    const char src[] =
+        "module main;"
+        "int foo(int a, int b, int c, int d)\n"
+        "{\n"
+        // 2, 3, 1, 24
+        "    return (((a * b)) / c) - ((d / a) / a);\n"
+        "}\n";
+        // 9 - (8 / 3)
+    coyc_pctx_t ctx;
+    ast_root_t root;
+    coyc_lexer_t lexer;
+    PRECONDITION(coyc_lexer_init(&lexer, "<src>", src, sizeof(src) - 1));
+    ctx.lexer = &lexer;
+    ctx.root = &root;
+    coyc_parse(&ctx);
+    ASSERT_EQ_STR(ctx.err_msg, NULL);
+    coyc_sctx_t *sctx = coyc_semalysis(&root);
+    ASSERT(sctx);
+    ASSERT_EQ_STR(sctx->err_msg, NULL);
+    ASSERT(sctx->module);
+    ASSERT(sctx->module->functions);
+    coy_vm_t vm;
+    coy_vm_init(&vm);
+
+    coy_thread_t* thread = coy_vm_create_thread(&vm);
+    coy_thread_create_frame_(thread, &sctx->module->functions[0], 4, false);
+    coy_push_uint(thread, 3);
+    coy_push_uint(thread, 3);
+    coy_push_uint(thread, 1);
+    coy_push_uint(thread, 24);
+    coy_thread_exec_frame_(thread);
+
+    ASSERT_EQ_UINT(thread->top->regs[0].u32, 0);
+
+    //coy_vm_deinit(&vm);   //< not yet implemented
+}
+
 int main()
 {
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
     TEST_EXEC(vm_basic);
+    TEST_EXEC(semalysis);
     return TEST_REPORT();
 }
