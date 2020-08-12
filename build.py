@@ -20,7 +20,7 @@ EXE_EXT = '.exe' if os.name == 'nt' else ''
 BIN_NAME = 'coyote' + EXE_EXT
 
 DEFAULT_FLAGS = {'-Wall', '-pedantic','-std=c99'}
-DEBUG_FLAGS = {'-g', '-Og'}
+DEBUG_FLAGS = {'-g', '-Og', '-DCOY_DEBUG'}
 # pixelherodev's personal flag set :P I'm insane, I know.
 PIXELS_DEVEL_FLAGS = { '-Werror', '-Wextra', '-Wno-error=unused-parameter', '-pedantic', '-march=native', '-mtune=native', '-falign-functions=32' }
 RELEASE_FLAGS = {'-O2'}
