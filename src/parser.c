@@ -56,8 +56,8 @@ static void parse_module(coyc_pctx_t *ctx)
         ERROR("Missing a module statement!");
     }
     
-    if (ctx->root->module_name) {
-        ERROR("Invalid `module` statement found!");
+    if (arrlenu(ctx->tokens) == 1) {
+        ERROR("No token after `module` statement!");
     }
 
     if (ctx->tokens[1].kind != COYC_TK_IDENT) {
@@ -361,10 +361,9 @@ void coyc_parse(coyc_pctx_t *ctx)
     if (!root) return;
 
     root->decls = NULL;
-    root->module_name = NULL;
+    root->module_name = "<undefined>";
 
     ctx->err_msg = NULL;
-    ctx->root = root;
     ctx->tokens = NULL;
     ctx->token_index = 0;
 
