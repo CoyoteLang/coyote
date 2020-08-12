@@ -12,6 +12,7 @@ coy_context_t* coy_context_create(struct coy_env* env)
     coy_gc_init_(&ctx->gc);
     ctx->index = stbds_arrlenu(env->contexts.ptr);
     ctx->id = env->contexts.next_id++;
+    ctx->top = NULL;
     ctx->top = coy_stack_segment_create_(ctx);
     coy_slots_init_(&ctx->nslots, 0);
     return stbds_arrput(env->contexts.ptr, ctx);
