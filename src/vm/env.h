@@ -20,6 +20,5 @@ typedef struct coy_env
 } coy_env_t;
 
 coy_env_t* coy_env_init(coy_env_t* env);
-struct coy_context* coy_env_create_context(coy_env_t* env);
 
 #endif /* COY_VM_ENV_H_ */
