@@ -2,11 +2,11 @@
 #define COY_VM_CONTEXT_H_
 
 #include "gc.h"
+#include "slots.h"
 
 #include <stdbool.h>
 
 struct coy_env;
-struct coy_stack_segment_;
 struct coy_function_;
 
 // A thread is store specific to a particular thread.
@@ -20,6 +20,7 @@ typedef struct coy_context
     uint32_t index;                 //< thread index in thread list; not unique
     uint32_t id;                    //< thread ID; unique for a particular execution
     struct coy_stack_segment_* top; //< top (current) stack segment
+    struct coy_slots_ nslots;       //< slots for native<->Coyote calls
 } coy_context_t;
 
 coy_context_t* coy_context_create(struct coy_env* env);

@@ -22,123 +22,117 @@
 
 static void coy_op_handle_add_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
-    assert(instr->op.nargs == 2);
-    size_t ra = frame->fp + instr[1].arg.index;
-    size_t rb = frame->fp + instr[2].arg.index;
-    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
-    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
-    coy_bitarray_set(&seg->pregs, dstreg, false);
+    COY_CHECK(instr->op.nargs == 2);
+    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
+    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
     case COY_OPFLG_TYPE_UINT32:
-        seg->regs[dstreg].u32 = seg->regs[ra].u32 + seg->regs[rb].u32;
+        dst.u32 = a.u32 + b.u32;
         break;
     default:
-        assert(0 && "invalid instruction");
+        COY_CHECK_MSG(false, "invalid instruction");
     }
+    coy_slots_setval_(&seg->slots, dstreg, dst);
 }
 static void coy_op_handle_sub_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
-    assert(instr->op.nargs == 2);
-    size_t ra = frame->fp + instr[1].arg.index;
-    size_t rb = frame->fp + instr[2].arg.index;
-    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
-    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
-    coy_bitarray_set(&seg->pregs, dstreg, false);
+    COY_CHECK(instr->op.nargs == 2);
+    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
+    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
     case COY_OPFLG_TYPE_UINT32:
-        seg->regs[dstreg].u32 = seg->regs[ra].u32 - seg->regs[rb].u32;
+        dst.u32 = a.u32 - b.u32;
         break;
     default:
-        assert(0 && "invalid instruction");
+        COY_CHECK_MSG(false, "invalid instruction");
     }
+    coy_slots_setval_(&seg->slots, dstreg, dst);
 }
 static void coy_op_handle_mul_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
-    assert(instr->op.nargs == 2);
-    size_t ra = frame->fp + instr[1].arg.index;
-    size_t rb = frame->fp + instr[2].arg.index;
-    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
-    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
-    coy_bitarray_set(&seg->pregs, dstreg, false);
-    uint32_t a, b, r;
+    COY_CHECK(instr->op.nargs == 2);
+    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
+    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ dst;
+    bool negresult;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
         // we do unsigned multiplication to avoid C undefined behavior
-        a = seg->regs[ra].u32;
-        if(a >> 31) a = -a;
-        b = seg->regs[rb].u32;
-        if(b >> 31) b = -b;
-        r = a * b;
-        seg->regs[dstreg].u32 = (seg->regs[ra].i32 < 0) == (seg->regs[rb].i32 < 0) ? r : -r;
+        negresult = (a.i32 < 0) != (b.i32 < 0);
+        a.u32 = a.i32;  //< to ensure proper conversion
+        if(a.u32 >> 31) a.u32 = -a.u32;
+        b.u32 = b.i32;  //< to ensure proper conversion
+        if(b.u32 >> 31) b.u32 = -b.u32;
+        dst.u32 = a.u32 * b.u32;
+        if(negresult)
+            dst.u32 = -dst.u32;
         break;
     case COY_OPFLG_TYPE_UINT32:
-        seg->regs[dstreg].u32 = seg->regs[ra].u32 * seg->regs[rb].u32;
+        dst.u32 = a.u32 * b.u32;
         break;
     default:
-        assert(0 && "invalid instruction");
+        COY_CHECK_MSG(false, "invalid instruction");
     }
+    coy_slots_setval_(&seg->slots, dstreg, dst);
 }
 static void coy_op_handle_div_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
-    assert(instr->op.nargs == 2);
-    size_t ra = frame->fp + instr[1].arg.index;
-    size_t rb = frame->fp + instr[2].arg.index;
-    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
-    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
-    coy_bitarray_set(&seg->pregs, dstreg, false);
-    uint32_t b;
+    COY_CHECK(instr->op.nargs == 2);
+    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
+    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
         COY_TODO("division of `int`");
     case COY_OPFLG_TYPE_UINT32:
-        b = seg->regs[rb].u32;
-        if(!b)
+        if(!b.u32)
             COY_TODO("handling division by 0");
-        seg->regs[dstreg].u32 = seg->regs[ra].u32 / b;
+        dst.u32 = a.u32 / b.u32;
         break;
     default:
-        assert(0 && "invalid instruction");
+        COY_CHECK_MSG(false, "invalid instruction");
     }
+    coy_slots_setval_(&seg->slots, dstreg, dst);
 }
 static void coy_op_handle_rem_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
-    assert(instr->op.nargs == 2);
-    size_t ra = frame->fp + instr[1].arg.index;
-    size_t rb = frame->fp + instr[2].arg.index;
-    assert(!coy_bitarray_get(&seg->pregs, ra) && "value A in binary op is a reference type");
-    assert(!coy_bitarray_get(&seg->pregs, rb) && "value B in binary op is a reference type");
-    coy_bitarray_set(&seg->pregs, dstreg, false);
-    uint32_t b;
+    COY_CHECK(instr->op.nargs == 2);
+    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
+    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
         COY_TODO("remainder of `int`");
     case COY_OPFLG_TYPE_UINT32:
-        b = seg->regs[rb].u32;
-        if(!b)
+        if(!b.u32)
             COY_TODO("handling remainder by 0");
-        seg->regs[dstreg].u32 = seg->regs[ra].u32 % b;
+        dst.u32 = a.u32 % b.u32;
         break;
     default:
-        assert(0 && "invalid instruction");
+        COY_CHECK_MSG(false, "invalid instruction");
     }
+    coy_slots_setval_(&seg->slots, dstreg, dst);
 }
 static void coy_op_handle_ret_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
-    assert(instr->op.nargs <= 1);
+    COY_CHECK(instr->op.nargs <= 1);
     if(instr->op.nargs)
     {
         size_t ra = frame->fp + instr[1].arg.index;
         if(ra != frame->fp) // it's a no-op if this is true
         {
-            coy_bitarray_set(&seg->pregs, frame->fp + 0, coy_bitarray_get(&seg->pregs, ra));
-            seg->regs[frame->fp + 0] = seg->regs[ra];
+            bool isptr;
+            union coy_register_ a = coy_slots_get_(&seg->slots, ra, &isptr);
+            coy_slots_set_(&seg->slots, frame->fp + 0, a, isptr);
         }
     }
     coy_context_pop_frame_(ctx);
@@ -150,7 +144,8 @@ static void coy_op_handle__dumpu32_(coy_context_t* ctx, struct coy_stack_segment
     for(size_t i = 1; i <= instr->op.nargs; i++)
     {
         size_t r = frame->fp + instr[i].arg.index;
-        printf(" $%" PRIu32 "=%" PRIu32, instr[i].arg.index, seg->regs[r].u32);
+        union coy_register_ reg = coy_slots_getval_(&seg->slots, r);
+        printf(" $%" PRIu32 "=%" PRIu32, instr[i].arg.index, reg.u32);
     }
     printf("\033[0m\n");
 }
@@ -178,8 +173,7 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
         struct coy_function_* func = frame->function;
         // TODO: we'll need to optimize this at some point ...
         size_t slen = frame->bp + func->u.coy.maxregs;
-        coy_bitarray_setlen(&seg->pregs, slen);
-        stbds_arrsetlen(seg->regs, slen);
+        coy_slots_setlen_(&seg->slots, slen);
         if(!func->blocks)
         {
             int32_t ret = func->u.cfunc(ctx);
@@ -205,7 +199,12 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
                     for(uint32_t i = 0; i < func->blocks[frame->block].nparams; i++)
                     {
                         if(i) putchar(' ');
-                        printf("$%" PRIu32 "=%" PRIu32, i, seg->regs[frame->fp+i].u32);
+                        bool isptr;
+                        union coy_register_ reg = coy_slots_get_(&seg->slots, frame->fp+i, &isptr);
+                        if(isptr)
+                            printf("$%" PRIu32 "=%p", i, reg.ptr);
+                        else
+                            printf("$%" PRIu32 "=%" PRIu32, i, reg.u32);
                     }
                     printf(")\n");
                 }
@@ -225,7 +224,14 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
             assert(h && "Invalid instruction"); // for now, we trust the bytecode
             h(ctx, seg, frame, instr, dstreg);
 #if COY_OP_TRACE_
-            printf("\t\tR:=%" PRIu32 "\n", seg->regs[dstreg].u32);
+            {
+                bool isptr;
+                union coy_register_ reg = coy_slots_get_(&seg->slots, dstreg, &isptr);
+                if(isptr)
+                    printf("\t\tR:=%p\n", reg.ptr);
+                else
+                    printf("\t\tR:=%" PRIu32 "\n", reg.u32);
+            }
 #endif
         }
         while(stbds_arrlenu(seg->frames) == nframes);
@@ -235,8 +241,9 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
 void coy_push_uint(coy_context_t* ctx, uint32_t u)
 {
     struct coy_stack_segment_* seg = ctx->top;
-    coy_bitarray_push(&seg->pregs, false);
-    stbds_arraddnptr(seg->regs, 1)->u32 = u;
+    coy_slots_setlen_(&seg->slots, coy_slots_getlen_(&seg->slots) + 1);
+    union coy_register_ val = {.u32 = u};
+    coy_slots_setval_(&seg->slots, coy_slots_getlen_(&seg->slots) - 1, val);
 }
 
 void vm_test_basicDBG(void)
@@ -272,7 +279,7 @@ void vm_test_basicDBG(void)
     coy_push_uint(ctx, 7);
     coy_vm_exec_frame_(ctx);
 
-    printf("RESULT: %" PRIu32 "\n", ctx->top->regs[0].u32);
+    printf("RESULT: %" PRIu32 "\n", coy_slots_getval_(&ctx->top->slots, 0).u32);
 
     //coy_env_deinit(&env);   //< not yet implemented
 }

@@ -9,6 +9,7 @@
 #include "stack.h"
 #include "function.h"
 #include "register.h"
+#include "slots.h"
 
 #include <stddef.h>
 #include <stdint.h>

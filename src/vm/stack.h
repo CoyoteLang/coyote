@@ -1,7 +1,7 @@
 #ifndef COY_VM_STACK_H_
 #define COY_VM_STACK_H_
 
-#include "../util/bitarray.h"
+#include "slots.h"
 
 #include <stdint.h>
 
@@ -26,8 +26,7 @@ struct coy_stack_frame_
 struct coy_stack_segment_
 {
     struct coy_stack_segment_* parent;
-    coy_bitarray_t pregs;   //< which registers are pointers
-    union coy_register_* regs;
+    struct coy_slots_ slots;
     // TODO: frames could eventually be merged into `regs`, with a clever use of the stack
     // (but this is easier for debugging)
     struct coy_stack_frame_* frames;

@@ -13,6 +13,7 @@ coy_context_t* coy_context_create(struct coy_env* env)
     ctx->index = stbds_arrlenu(env->contexts.ptr);
     ctx->id = env->contexts.next_id++;
     ctx->top = coy_stack_segment_create_(ctx);
+    coy_slots_init_(&ctx->nslots, 0);
     return stbds_arrput(env->contexts.ptr, ctx);
 }
 
@@ -23,7 +24,7 @@ void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function,
     struct coy_stack_segment_* seg = ctx->top;
 
     struct coy_stack_frame_ frame;
-    frame.fp = stbds_arrlenu(seg->regs);
+    frame.fp = coy_slots_getlen_(&seg->slots);
     frame.bp = frame.fp + nparams;
     frame.block = 0;
     frame.pc = 0;

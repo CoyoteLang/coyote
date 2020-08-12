@@ -160,7 +160,7 @@ TEST(semalysis)
     coy_push_uint(ctx, 24);
     coy_vm_exec_frame_(ctx);
 
-    ASSERT_EQ_UINT(ctx->top->regs[0].u32, 0);
+    ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
 
     //coy_env_deinit(&env);   //< not yet implemented
 }
