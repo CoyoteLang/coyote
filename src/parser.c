@@ -8,6 +8,7 @@ tolerant is extremely important, and a high-priority TODO.
 #include "ast.h"
 #include "util/string.h"
 #include "util/hints.h"
+#include "util/debug.h"
 #include "stb_ds.h"
 
 #include <inttypes.h>
@@ -28,7 +29,8 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_pctx_t *ctx, con
     longjmp(ctx->err_env, 255);
 }
 
-#define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
+#define ERROR(msg) do { errorf(ctx, "%s", msg); } while (0);
+
 
 static COY_HINT_NORETURN void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
     char buf[128];
@@ -46,6 +48,9 @@ static type_t coyc_type(coyc_token_t token) {
     type.primitive = invalid;
     if (strncmp(token.ptr, "int", token.len) == 0) {
         type.primitive = _int;
+    }
+    if (type.primitive == invalid) {
+        COY_TODO("parse more types");
     }
     return type;
 }
@@ -108,7 +113,7 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_pr
         ctx->token_index += 1;
         return val;
     }
-    ERROR("TODO more atoms");
+    COY_TODO("More atoms");
     // Not yet used.
 }
 
@@ -290,9 +295,6 @@ static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
             token = ctx->tokens[ctx->token_index];
         }
         type_t type = coyc_type(token);
-        if (type.primitive == invalid) {
-            error_token(ctx, token, "TODO parse type %s");
-        }
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
         if (token.kind != COYC_TK_IDENT) {
@@ -326,9 +328,6 @@ static void parse_decl(coyc_pctx_t *ctx)
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind == COYC_TK_TYPE) {
         const type_t type = coyc_type(token);
-        if (type.primitive == invalid) {
-            error_token(ctx, token, "TODO parse type %s");
-        }
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
         if (token.kind == COYC_TK_IDENT) {
