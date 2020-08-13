@@ -12,7 +12,7 @@ struct coy_slots_* coy_slots_init_(struct coy_slots_* slots, size_t initsize)
     coy_bitarray_init(&slots->pregs);
     coy_bitarray_setlen(&slots->pregs, initsize);
     slots->regs = NULL;
-    stbds_arrsetlen(slots->regs, initsize);
+    stbds_arrsetcap(slots->regs, initsize);
     return slots;
 }
 void coy_slots_deinit_(struct coy_slots_* slots)
