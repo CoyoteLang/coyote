@@ -38,7 +38,7 @@ struct coy_function_
         struct
         {
             union coy_instruction_* instrs;
-            uint32_t maxregs;   //< max # of registers used; same as max(block.nparams + block.size - 1)
+            uint32_t maxregs;   //< max # of registers used; same as max(block.nparams + block.size)
         } coy;
         coy_c_function_t* cfunc;
     } u;
