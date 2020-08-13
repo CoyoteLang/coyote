@@ -1,2 +1,2 @@
 language = "C"
-run = "make -j4"
+run = "python build.py -j"
