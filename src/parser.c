@@ -346,6 +346,9 @@ static void parse_decl(coyc_pctx_t *ctx)
             errorf(ctx, "TODO parser TYPE %s", coyc_token_kind_tostr_DBG(token.kind));
         }
     }
+    else if (token.kind == COYC_TK_MODULE) {
+        ERROR("Duplicate module statement found!");
+    }
     else {
         errorf(ctx, "TODO parse %s", coyc_token_kind_tostr_DBG(token.kind));    
     }
