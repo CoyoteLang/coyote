@@ -188,11 +188,15 @@ def emit_target(tgt, emitted=None):
 '''.format(**params))
     if artifacts:
         t.append('''\
+
 {t_name}: {t_artifacts}
 '''.format(**params))
     t.append('''\
+
 {t_name}_OBJECTS = {t_objects}
+
 {t_name}_HEADERS = {t_headers}
+
 '''.format(**params))
     for a in artifacts:
         t.append('''\
@@ -212,7 +216,7 @@ else:
     print(t.rstrip())
 print('-' * 10)
 
-with NamedTemporaryFile('w', prefix='coy-build-', suffix='.mk', delete=False) as f:
+with open('Makefile', 'w') as f:
     f.write(t)
 
 extra = []
@@ -221,6 +225,5 @@ if args.force_rebuild:
 if args.num_threads is not ...:
     extra.append('-j%u' % args.num_threads if args.num_threads else '-j')
 return_code = subprocess.call(['make'] + extra + ['-f', f.name, '--no-print-directory'])
-os.unlink(f.name)
 exit(return_code)
 
