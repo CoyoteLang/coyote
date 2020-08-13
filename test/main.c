@@ -165,6 +165,61 @@ TEST(compiler)
     //coy_env_deinit(&env);   //< not yet implemented
 }
 
+const char *bad_srcs[] = {
+    "module 1;",
+    "module test;\n"
+    "module 2;",
+    "int a() {}",
+};
+
+const char *bad_parse_msgs[] = {
+    "Expected identifier for module name!",
+    "Duplicate module statement found!",
+    "Missing a module statement!",
+};
+
+const char *bad_comp_msgs[] = {
+    NULL,
+    NULL,
+    NULL,
+};
+
+coy_function_t good_funcs[] = {
+    { .blocks = NULL, },
+    { .blocks = NULL, },
+    { .blocks = NULL, },
+};
+
+TEST(semantic_analysis) {
+    size_t src_size = sizeof(bad_srcs) / sizeof(*bad_srcs);
+    size_t pmsg_size = sizeof(bad_parse_msgs) / sizeof(*bad_parse_msgs);
+    size_t smsg_size = sizeof(bad_comp_msgs) / sizeof(*bad_comp_msgs);
+    size_t gmsg_size = sizeof(good_funcs) / sizeof(coy_function_t);
+    PRECONDITION(src_size == pmsg_size && "Forgot to add a parser error message (or NULL)");
+    PRECONDITION(src_size == smsg_size && "Forgot to add a compilation error message (or NULL)");
+    PRECONDITION(src_size == gmsg_size && "Forgot to add a coy_function_t ");
+    for (size_t i = 0; i < sizeof(bad_srcs) / sizeof(*bad_srcs); i += 1) {
+        PRECONDITION(bad_srcs[i]);
+        coyc_pctx_t pctx;
+        ast_root_t root;
+        coyc_lexer_t lexer;
+        PRECONDITION(coyc_lexer_init(&lexer, "<semalysis_test>", bad_srcs[i], strlen(bad_srcs[i])));
+        pctx.lexer = &lexer;
+        pctx.root = &root;
+        coyc_parse(&pctx);
+        ASSERT_EQ_STR(pctx.err_msg, bad_parse_msgs[i]);
+        if (!pctx.err_msg) {
+            // Parser is good, let's check semalysis
+            coyc_sctx_t *sctx = coyc_semalysis(&root);
+            ASSERT(sctx);
+            ASSERT_EQ_STR(sctx->err_msg, bad_comp_msgs[i]);
+        }
+        else {
+            PRECONDITION(!bad_comp_msgs[i]);
+        }
+    }
+}
+
 TEST(vm_jmpc)
 {
 /*
@@ -295,6 +350,7 @@ int main()
 {
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
+    TEST_EXEC(semantic_analysis);
     TEST_EXEC(vm_basic);
     TEST_EXEC(vm_jmpc);
     TEST_EXEC(compiler);
