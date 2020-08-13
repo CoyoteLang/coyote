@@ -126,7 +126,7 @@ TEST(vm_basic)
     vm_test_basicDBG();
 }
 
-TEST(semalysis)
+TEST(compiler)
 { 
     const char src[] =
         "module main;"
@@ -297,6 +297,6 @@ int main()
     TEST_EXEC(parser);
     TEST_EXEC(vm_basic);
     TEST_EXEC(vm_jmpc);
-    TEST_EXEC(semalysis);
+    TEST_EXEC(compiler);
     return TEST_REPORT();
 }
