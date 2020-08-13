@@ -122,6 +122,69 @@ static void coy_op_handle_rem_(coy_context_t* ctx, struct coy_stack_segment_* se
     }
     coy_slots_setval_(&seg->slots, dstreg, dst);
 }
+static void coy_op_handle_jmp_helper_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t block_arg, uint32_t mov_head, uint32_t mov_tail)
+{
+    COY_CHECK_MSG(!((mov_tail - mov_head) & 1), "need an even number of moves");
+    uint32_t block = instr[1+block_arg].raw;
+    for(size_t i = mov_head; i < mov_tail; i += 2)
+    {
+        uint32_t dst = frame->fp + instr[1+i+0].arg.index;
+        uint32_t src = frame->fp + instr[1+i+1].arg.index;
+        // this can *definitely* be optimized
+        bool isptr;
+        union coy_register_ r = coy_slots_get_(&seg->slots, src, &isptr);
+        coy_slots_set_(&seg->slots, dst, r, isptr);
+    }
+    COY_CHECK(block < stbds_arrlenu(frame->function->blocks));
+    frame->block = block;
+    struct coy_function_block_* blockinfo = &frame->function->blocks[block];
+    frame->bp = frame->fp + blockinfo->nparams;
+    frame->pc = blockinfo->offset;
+}
+static void coy_op_handle_jmp_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    coy_op_handle_jmp_helper_(ctx, seg, frame, instr, 0, 1, instr->op.nargs);
+}
+static void coy_op_handle_jmpc_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
+{
+    COY_CHECK(instr->op.nargs >= 5);
+    bool isptra, isptrb;
+    union coy_register_ a = coy_slots_get_(&seg->slots, frame->fp + instr[1].arg.index, &isptra);
+    union coy_register_ b = coy_slots_get_(&seg->slots, frame->fp + instr[2].arg.index, &isptrb);
+    bool testeq, testlt;
+    switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
+    {
+    case COY_OPFLG_TYPE_INT32:
+        COY_CHECK(!isptra && !isptrb);
+        testeq = a.i32 == b.i32;
+        testlt = a.i32 < b.i32;
+        break;
+    case COY_OPFLG_TYPE_UINT32:
+        COY_CHECK(!isptra && !isptrb);
+        testeq = a.u32 == b.u32;
+        testlt = a.u32 < b.u32;
+        break;
+    default:
+        testeq = testlt = false;
+        COY_CHECK_MSG(false, "invalid instruction");
+    }
+    bool test;
+    switch(instr->op.flags & COY_OPFLG_CMP_MASK)
+    {
+    case COY_OPFLG_CMP_EQ: test = testeq; break;
+    case COY_OPFLG_CMP_NE: test = !testeq; break;
+    case COY_OPFLG_CMP_LE: test = testlt || testeq; break;
+    case COY_OPFLG_CMP_LT: test = testlt; break;
+    default:
+        test = false;
+        COY_UNREACHABLE();
+    }
+    uint32_t moves_sep = instr[5].raw;
+    if(test)
+        coy_op_handle_jmp_helper_(ctx, seg, frame, instr, 2, 5, 5 + moves_sep);
+    else
+        coy_op_handle_jmp_helper_(ctx, seg, frame, instr, 3, 5 + moves_sep, instr->op.nargs);
+}
 static void coy_op_handle_ret_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs <= 1);
@@ -152,12 +215,14 @@ static void coy_op_handle__dumpu32_(coy_context_t* ctx, struct coy_stack_segment
 
 typedef void coy_op_handler_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg);
 static coy_op_handler_* const coy_op_handlers_[256] = {
-    [COY_OPCODE_ADD] = coy_op_handle_add_,
-    [COY_OPCODE_SUB] = coy_op_handle_sub_,
-    [COY_OPCODE_MUL] = coy_op_handle_mul_,
-    [COY_OPCODE_DIV] = coy_op_handle_div_,
-    [COY_OPCODE_REM] = coy_op_handle_rem_,
-    [COY_OPCODE_RET] = coy_op_handle_ret_,
+    [COY_OPCODE_ADD]    = coy_op_handle_add_,   // add $a, $b
+    [COY_OPCODE_SUB]    = coy_op_handle_sub_,   // sub $a, $b
+    [COY_OPCODE_MUL]    = coy_op_handle_mul_,   // mul $a, $b
+    [COY_OPCODE_DIV]    = coy_op_handle_div_,   // div $a, $b
+    [COY_OPCODE_REM]    = coy_op_handle_rem_,   // rem $a, $b
+    [COY_OPCODE_JMP]    = coy_op_handle_jmp_,   // jmp <block>, $vmaps...
+    [COY_OPCODE_JMPC]   = coy_op_handle_jmpc_,  // jmp $a, $b, <block>, $vmaps...
+    [COY_OPCODE_RET]    = coy_op_handle_ret_,   // ret $vals...
     [COY_OPCODE__DUMPU32] = coy_op_handle__dumpu32_,
 };
 
@@ -190,6 +255,7 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
         do // execute function; this loop is optional, but is done as an optimization
         {
             const union coy_instruction_* instr = &func->u.coy.instrs[frame->pc];
+            uint32_t dstreg = frame->bp + frame->pc - func->blocks[frame->block].offset;
 #if COY_OP_TRACE_
             {
                 if(pblock != frame->block)
@@ -210,7 +276,7 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
                 }
                 const char* name = coy_instruction_opcode_names_[instr->op.code];
                 if(!name) name = "<?>";
-                printf("\t$%u = %s", (unsigned)((frame->bp - frame->fp) + frame->pc), name);
+                printf("\t$%" PRIu32 " = %s", dstreg - frame->fp, name);
                 for(size_t i = 1; i <= instr->op.nargs; i++)
                 {
                     printf(" $%" PRIu32, instr[i].arg.index);
@@ -218,7 +284,6 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
                 printf("\n");
             }
 #endif
-            uint32_t dstreg = frame->bp + frame->pc - func->blocks[frame->block].offset;
             frame->pc += 1U + instr->op.nargs;
             coy_op_handler_* h = coy_op_handlers_[instr->op.code];
             assert(h && "Invalid instruction"); // for now, we trust the bytecode
@@ -250,8 +315,10 @@ void vm_test_basicDBG(void)
 {
     static const struct coy_function_block_ in_blocks[] = {
         {2,0},
+        {1,11},
     };
     static const union coy_instruction_ in_instrs[] = {
+        //  BLOCK 0 (@0)
         /*2*/   {.op={COY_OPCODE_ADD, COY_OPFLG_TYPE_UINT32, 0, 2}},
         /*3*/   {.arg={0,0}},
         /*4*/   {.arg={1,0}},
@@ -259,8 +326,16 @@ void vm_test_basicDBG(void)
         /*-*/   {.arg={0,0}},
         /*-*/   {.arg={1,0}},
         /*-*/   {.arg={2,0}},
+        /*-*/   {.op={COY_OPCODE_JMP, 0, 0, 3}},
+        /*-*/   {.raw=1},
+        /*-*/   {.arg={0,0}},
+        /*-*/   {.arg={2,0}},
+
+        // BLOCK 1 (@11)
+        /*-*/   {.op={COY_OPCODE__DUMPU32, 0, 0, 1}},
+        /*-*/   {.arg={0,0}},
         /*5*/   {.op={COY_OPCODE_RET, 0, 0, 1}},
-        /*6*/   {.arg={2,0}},
+        /*6*/   {.arg={0,0}},
     };
 
     struct coy_function_ func = {NULL};

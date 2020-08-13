@@ -21,10 +21,29 @@ void coy_module_free(coy_module_t *module);
     ITEM(MUL),              \
     ITEM(DIV),              \
     ITEM(REM),              \
-    /*ITEM(JMP),              */\
+    ITEM(JMP),              \
+    ITEM(JMPC),             \
     ITEM(RET),              \
     ITEM(_DUMPU32)VAL(0xF0) \
     VLAST(0xFF)
+
+/*
+jmp encoding for `jmp .X($1,$2):
+    OP:     op=jmp
+    ARG:    immediate=.X
+    ARG:    <arbitrary amount of pairs of moves>
+
+jmpc encoding for `jmpc lt $a, $b, .X($1,$2), .Y($3,$4)`:
+    OP:     op=jmpc flags=TYPE_x | CMP_LT               ; CMP is one of EQ, NE, LT, LE
+    ARG:    reg=$a
+    ARG:    reg=$b
+    ARG:    immediate=.X                                ; encoded directly (not a reg)
+    ARG:    immediate=.Y                                ; encoded directly (not a reg)
+    ARG:    immediate=moves_sep                         ; end of .X, start of .Y
+    ARG:    <arbitrary amount of pairs of moves>
+    ; .X's parameters are in args: [5,5+moves_sep)
+    ; .Y's parameters are in args: [5+moves_sep,nargs)
+*/
 
 typedef enum coy_instruction_opcode_
 {
@@ -64,5 +83,16 @@ static const char* const coy_instruction_opcode_names_[256] = {
 #define COY_OPFLG_TYPE_UINT32   (COY_OPFLG_UNSIGNED | COY_OPFLG_32BIT)
 
 #define COY_OPFLG_TYPE_MASK     (0xC0 | 0x30)
+
+// used in JMP
+#define COY_OPFLG_CMP_EQ    0x00
+#define COY_OPFLG_CMP_NE    0x01
+#define COY_OPFLG_CMP_LE    0x02
+#define COY_OPFLG_CMP_LT    0x03
+// use LT, LE respectively (with reversed operands)
+//#define COY_OPFLG_CMP_GE
+//#define COY_OPFLG_CMP_GT
+
+#define COY_OPFLG_CMP_MASK  0x03
 
 #endif /* COY_BYTECODE_H_ */
