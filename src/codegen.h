@@ -1,5 +1,5 @@
-#ifndef COY_SEMALYSIS_H
-#define COY_SEMALYSIS_H
+#ifndef COY_CODEGEN_H
+#define COY_CODEGEN_H
 
 #include <setjmp.h>
 

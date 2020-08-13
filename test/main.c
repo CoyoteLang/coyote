@@ -1,6 +1,6 @@
 #include "lexer.h"
 #include "ast.h"
-#include "semalysis.h"
+#include "codegen.h"
 #include "stb_ds.h"
 
 // TEMPORARY
@@ -126,7 +126,7 @@ TEST(vm_basic)
     vm_test_basicDBG();
 }
 
-TEST(compiler)
+TEST(codegen)
 { 
     const char src[] =
         "module main;"
@@ -353,6 +353,6 @@ int main()
     TEST_EXEC(semantic_analysis);
     TEST_EXEC(vm_basic);
     TEST_EXEC(vm_jmpc);
-    TEST_EXEC(compiler);
+    TEST_EXEC(codegen);
     return TEST_REPORT();
 }

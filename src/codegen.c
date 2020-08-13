@@ -1,4 +1,4 @@
-#include "semalysis.h"
+#include "codegen.h"
 
 #include <setjmp.h>
 #include <stdarg.h>
@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "stb_ds.h"
+#include "util/debug.h"
 #include "util/hints.h"
 #include "util/string.h"
 
@@ -44,7 +45,7 @@ static size_t expr_value_reg(coyc_sctx_t *ctx, coy_instruction_t **instrs, expre
         }
         return reg;}
     default:
-        errorf(ctx, "TODO exprgen_value %d", value.type);
+        COY_TODO("TODO exprgen_value more");
     }
 }
 

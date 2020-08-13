@@ -9,7 +9,7 @@ default: test
 
 all: stb_ds test
 
-HEADERS=lib/stb_ds.h src/ast.h src/bytecode.h src/lexer.h src/semalysis.h src/token.h src/util/bitarray.h src/util/debug.h src/util/hints.h src/util/string.h src/vm/compat_shims.h src/vm/context.h src/vm/env.h src/vm/function.h src/vm/gc.h src/vm/register.h src/vm/slots.h src/vm/stack.h src/vm/typeinfo.h test/test.h
+HEADERS=lib/stb_ds.h src/ast.h src/bytecode.h src/codegen.h src/lexer.h src/token.h src/util/bitarray.h src/util/debug.h src/util/hints.h src/util/string.h src/vm/compat_shims.h src/vm/context.h src/vm/env.h src/vm/function.h src/vm/gc.h src/vm/register.h src/vm/slots.h src/vm/stack.h src/vm/typeinfo.h test/test.h
 build/obj/%.o: %.c $(HEADERS)
 	$(CC) $(CFLAGS) $(INCLUDES) $< -c -o $@
 
@@ -24,9 +24,9 @@ stb_ds_HEADERS = lib/stb_ds.h
 
 test: build/test
 
-test_OBJECTS = build/obj/src/lexer.o build/obj/src/parser.o build/obj/src/semalysis.o build/obj/src/token.o build/obj/src/util/bitarray.o build/obj/src/util/debug.o build/obj/src/util/string.o build/obj/src/vm/context.o build/obj/src/vm/env.o build/obj/src/vm/function.o build/obj/src/vm/gc.o build/obj/src/vm/slots.o build/obj/src/vm/stack.o build/obj/src/vm/vm.o build/obj/test/main.o
+test_OBJECTS = build/obj/src/codegen.o build/obj/src/lexer.o build/obj/src/parser.o build/obj/src/token.o build/obj/src/util/bitarray.o build/obj/src/util/debug.o build/obj/src/util/string.o build/obj/src/vm/context.o build/obj/src/vm/env.o build/obj/src/vm/function.o build/obj/src/vm/gc.o build/obj/src/vm/slots.o build/obj/src/vm/stack.o build/obj/src/vm/vm.o build/obj/test/main.o
 
-test_HEADERS = src/ast.h src/bytecode.h src/lexer.h src/semalysis.h src/token.h src/util/bitarray.h src/util/debug.h src/util/hints.h src/util/string.h src/vm/compat_shims.h src/vm/context.h src/vm/env.h src/vm/function.h src/vm/gc.h src/vm/register.h src/vm/slots.h src/vm/stack.h src/vm/typeinfo.h test/test.h
+test_HEADERS = src/ast.h src/bytecode.h src/codegen.h src/lexer.h src/token.h src/util/bitarray.h src/util/debug.h src/util/hints.h src/util/string.h src/vm/compat_shims.h src/vm/context.h src/vm/env.h src/vm/function.h src/vm/gc.h src/vm/register.h src/vm/slots.h src/vm/stack.h src/vm/typeinfo.h test/test.h
 
 build/test: $(test_OBJECTS)  $(stb_ds_OBJECTS) $(stb_ds_HEADERS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
