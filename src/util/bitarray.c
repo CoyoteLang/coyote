@@ -16,6 +16,10 @@ void coy_bitarray_deinit(coy_bitarray_t* bitarr)
 {
     stbds_arrfree(bitarr->data);
 }
+void coy_bitarray_clear(coy_bitarray_t* bitarr)
+{
+    memset(bitarr->data, 0, bitarr->len / CHAR_BIT);
+}
 
 size_t coy_bitarray_getlen_elems(const coy_bitarray_t* bitarr)
 {

@@ -14,6 +14,7 @@ typedef struct coy_bitarray
 
 coy_bitarray_t* coy_bitarray_init(coy_bitarray_t* bitarr);
 void coy_bitarray_deinit(coy_bitarray_t* bitarr);
+void coy_bitarray_clear(coy_bitarray_t* bitarr);
 
 // these operate in terms of elements (useful for iterating)
 size_t coy_bitarray_getlen_elems(const coy_bitarray_t* bitarr);
