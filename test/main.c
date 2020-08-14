@@ -153,25 +153,26 @@ TEST(codegen)
     ASSERT_EQ_STR(pctx.err_msg, NULL);
     char *smsg = coyc_semalysis(&root);
     ASSERT_EQ_STR(smsg, NULL);
-    ASSERT_TODO("REIMPLEMENT");
-    //ASSERT(sctx);
-    //ASSERT_EQ_STR(sctx->err_msg, NULL);
-    //ASSERT(sctx->module);
-    //ASSERT(sctx->module->functions);
+
+    coyc_cctx_t cctx = coyc_codegen(&root);
+    ASSERT_EQ_STR(cctx.err_msg, NULL);
+    ASSERT(cctx.module);
+    ASSERT(cctx.module->functions);
+
     coy_env_t env;
     coy_env_init(&env);
 
-    //coy_context_t* ctx = coy_context_create(&env);
-    //coy_context_push_frame_(ctx, &sctx->module->functions[0], 4, false);
-    //coy_push_uint(ctx, 2);
-    //coy_push_uint(ctx, 3);
-    //coy_push_uint(ctx, 1);
-    //coy_push_uint(ctx, 24);
-    //coy_vm_exec_frame_(ctx);
+    coy_context_t* ctx = coy_context_create(&env);
+    coy_context_push_frame_(ctx, &cctx.module->functions[0], 4, false);
+    coy_push_uint(ctx, 2);
+    coy_push_uint(ctx, 3);
+    coy_push_uint(ctx, 1);
+    coy_push_uint(ctx, 24);
+    coy_vm_exec_frame_(ctx);
 
-    //ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
+    ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
 
-    //coy_env_deinit(&env);   //< not yet implemented
+  //  coy_env_deinit(&env);   //< not yet implemented
 }
 
 const char *bad_srcs[] = {
