@@ -31,7 +31,6 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_pctx_t *ctx, con
 
 #define ERROR(msg) do { errorf(ctx, "%s", msg); } while (0);
 
-
 static COY_HINT_NORETURN void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
     char buf[128];
     size_t len = token.len < 128 ? token.len : 127;
@@ -45,11 +44,12 @@ static COY_HINT_NORETURN void error_token(coyc_pctx_t *ctx, coyc_token_t token, 
 
 static type_t coyc_type(coyc_token_t token) {
     type_t type;
-    type.primitive = invalid;
+    type.type = no_type;
     if (strncmp(token.ptr, "int", token.len) == 0) {
-        type.primitive = _int;
+        type.type = primitive;
+        type.primitive.primitive = _int;
     }
-    if (type.primitive == invalid) {
+    if (type.type == no_type) {
         COY_TODO("parse more types");
     }
     return type;
@@ -100,7 +100,8 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_pr
     if (token.kind == COYC_TK_INTEGER) {
         expression_value_t val;
         val.literal.type = literal;
-        val.literal.value.integer.type.primitive = uint;
+        val.literal.value.integer.type.type = primitive;
+        val.literal.value.integer.type.primitive.primitive = int_literal;
         // TODO: error checking
         sscanf(token.ptr, "%" SCNu64, &val.literal.value.integer.value);
         ctx->token_index += 1;
@@ -205,7 +206,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
     expr->lhs = compute_atom(ctx, minimum_prec);
     expr->rhs.type = none;
     // TODO
-    expr->type = expr->lhs.literal.value.integer.type;
+    expr->type.type = no_type;
     while (true) {
         coyc_token_t token = ctx->tokens[ctx->token_index];
         if (token.kind == COYC_TK_SCOLON) {
@@ -222,6 +223,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
             expr->lhs.expression.type = expression;
             expr->lhs.expression.expression = subexpr;
             expr->rhs.type = none;
+            expr->type.type = none;
         }
         expr->op = token;
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;

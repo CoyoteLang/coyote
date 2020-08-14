@@ -1,4 +1,4 @@
-#include "codegen.h"
+#include "semalysis.h"
 
 #include <setjmp.h>
 #include <stdarg.h>
@@ -10,14 +10,14 @@
 #include "util/debug.h"
 #include "util/hints.h"
 #include "util/string.h"
-
+/*
 static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_sctx_t *ctx, const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
     char *buf = coy_vaprintf_(fmt, args);
     va_end(args);
     ctx->err_msg = buf;
-    fprintf(stderr, "Semantic analysis: %s\n", buf);
+    fprintf(stderr, "Codegen: %s\n", buf);
     longjmp(ctx->err_env, 255);
 }
 
@@ -161,4 +161,4 @@ coyc_sctx_t *coyc_semalysis(ast_root_t *root) {
 
 void coy_module_free(coy_module_t *module) {
     free(module);
-}
+}*/

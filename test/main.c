@@ -1,16 +1,20 @@
-#include "lexer.h"
-#include "ast.h"
-#include "codegen.h"
-#include "stb_ds.h"
+#include "compiler/lexer.h"
+#include "compiler/ast.h"
+#include "compiler/semalysis.h"
+#include "compiler/codegen.h"
 
-// TEMPORARY
-#include "vm/compat_shims.h"
+#include "bytecode.h"
+
+#include "stb_ds.h"
 
 #include "test.h"
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+// TEMPORARY
+#include "vm/compat_shims.h"
 
 static const char src_lexer_parser[] =
         "module test;\n"
@@ -100,7 +104,8 @@ TEST(parser)
     function_t func = decl.function;
     ASSERT(func.base.name);
     ASSERT_EQ_STR(func.base.name, "foo");
-    ASSERT_EQ_INT(func.return_type.primitive, _int);
+    ASSERT_EQ_INT(func.return_type.type, primitive);
+    ASSERT_EQ_INT(func.return_type.primitive.primitive, _int);
     ASSERT(func.statements);
     ASSERT_EQ_UINT(arrlen(func.statements), 1);
     statement_t stmt = func.statements[0];
@@ -110,8 +115,10 @@ TEST(parser)
     ASSERT(stmt.return_.value->lhs.type == literal);
     // If rhs.type is none, the value is just the lhs, and op is 
     ASSERT_EQ_INT(stmt.return_.value->rhs.type, none);
-    ASSERT_EQ_INT(stmt.return_.value->type.primitive, uint);
-    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.primitive, uint);
+    ASSERT_EQ_INT(stmt.return_.value->type.type, primitive);
+    ASSERT_EQ_INT(stmt.return_.value->type.primitive.primitive, int_literal);
+    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.type, primitive);
+    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.primitive.primitive, int_literal);
     ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.value, 0);
 
     // Finally, clean up. Note that I only do this so Valgrind doesn't complain;
@@ -144,23 +151,25 @@ TEST(codegen)
     pctx.root = &root;
     coyc_parse(&pctx);
     ASSERT_EQ_STR(pctx.err_msg, NULL);
-    coyc_sctx_t *sctx = coyc_semalysis(&root);
-    ASSERT(sctx);
-    ASSERT_EQ_STR(sctx->err_msg, NULL);
-    ASSERT(sctx->module);
-    ASSERT(sctx->module->functions);
+    char *smsg = coyc_semalysis(&root);
+    ASSERT_EQ_STR(smsg, NULL);
+    ASSERT_TODO("REIMPLEMENT");
+    //ASSERT(sctx);
+    //ASSERT_EQ_STR(sctx->err_msg, NULL);
+    //ASSERT(sctx->module);
+    //ASSERT(sctx->module->functions);
     coy_env_t env;
     coy_env_init(&env);
 
-    coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &sctx->module->functions[0], 4, false);
-    coy_push_uint(ctx, 2);
-    coy_push_uint(ctx, 3);
-    coy_push_uint(ctx, 1);
-    coy_push_uint(ctx, 24);
-    coy_vm_exec_frame_(ctx);
+    //coy_context_t* ctx = coy_context_create(&env);
+    //coy_context_push_frame_(ctx, &sctx->module->functions[0], 4, false);
+    //coy_push_uint(ctx, 2);
+    //coy_push_uint(ctx, 3);
+    //coy_push_uint(ctx, 1);
+    //coy_push_uint(ctx, 24);
+    //coy_vm_exec_frame_(ctx);
 
-    ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
+    //ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
 
     //coy_env_deinit(&env);   //< not yet implemented
 }
@@ -210,9 +219,10 @@ TEST(semantic_analysis) {
         ASSERT_EQ_STR(pctx.err_msg, bad_parse_msgs[i]);
         if (!pctx.err_msg) {
             // Parser is good, let's check semalysis
-            coyc_sctx_t *sctx = coyc_semalysis(&root);
-            ASSERT(sctx);
-            ASSERT_EQ_STR(sctx->err_msg, bad_comp_msgs[i]);
+            ASSERT_TODO("IMPLEMENT");
+        //    coyc_sctx_t *sctx = coyc_semalysis(&root);
+//            ASSERT(sctx);
+  //          ASSERT_EQ_STR(sctx->err_msg, bad_comp_msgs[i]);
         }
         else {
             PRECONDITION(!bad_comp_msgs[i]);

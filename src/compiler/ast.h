@@ -8,11 +8,19 @@
 #include "lexer.h"
 
 typedef enum primitive {
-    invalid, uint, _int,
+    invalid, uint, _int, int_literal,
 } primitive_t;
 
+typedef enum {
+    no_type, primitive, 
+} type_type_t;
+
 typedef union type {
-    primitive_t primitive;
+    type_type_t type;
+    struct {
+        type_type_t type;
+        primitive_t primitive;
+    } primitive;
 } type_t;
 
 typedef struct {
@@ -27,7 +35,7 @@ typedef enum {
 typedef struct expression expression_t;
 
 typedef enum {
-    none, literal, identifier, expression, 
+    none, literal, identifier, parameter, expression,  
 } expression_value_type_t;
 
 typedef union {
@@ -52,6 +60,10 @@ typedef union {
         expression_value_type_t type;
         char *name;
     } identifier;
+    struct {
+        expression_value_type_t type;
+        size_t index;
+    } parameter;
 } expression_value_t;
 
 struct expression {
