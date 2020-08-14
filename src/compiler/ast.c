@@ -223,7 +223,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
             expr->lhs.expression.type = expression;
             expr->lhs.expression.expression = subexpr;
             expr->rhs.type = none;
-            expr->type.type = none;
+            expr->type.type = no_type;
         }
         expr->op = token;
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
