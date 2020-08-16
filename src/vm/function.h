@@ -17,8 +17,9 @@ union coy_instruction_
     } op;
     struct
     {
-        uint32_t index: 24;
+        uint32_t index: 23;
         uint32_t _reserved: 8;  // eventually: VM register?
+        uint32_t isconst: 1;
     } arg;
     uint32_t raw;
 };
