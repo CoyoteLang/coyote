@@ -49,6 +49,10 @@ static type_t coyc_type(coyc_token_t token) {
         type.type = primitive;
         type.primitive.primitive = _int;
     }
+    if (!strncmp(token.ptr, "uint", token.len) || !strncmp(token.ptr, "u32", token.len)) {
+        type.type = primitive;
+        type.primitive.primitive = uint;
+    }
     if (type.type == no_type) {
         COY_TODO("parse more types");
     }

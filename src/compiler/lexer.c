@@ -93,7 +93,11 @@ coyc_token_t coyc_lexer_mktoken_(coyc_lexer_t* lexer, coyc_token_kind_t kind, si
     return lexer->token;
 }
 
-#define COYC_LEXER_ISKEYWORD_(lexer, keyword) ((lexer)->token.len == sizeof(keyword) - 1 && !memcmp((lexer)->token.ptr, keyword, sizeof(keyword) - 1))
+#define COYC_LEXER_ISKEYWORD_(lexer, keyword) ((lexer)->token.len == strlen(keyword) && !memcmp((lexer)->token.ptr, keyword, strlen(keyword)))
+
+const char *types[] = {
+    "int", "uint", "u32"
+};
 
 coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
 {
@@ -198,9 +202,16 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
                     break;
             }
             coyc_lexer_mktoken_(lexer, COYC_TK_IDENT, i);
-            if(COYC_LEXER_ISKEYWORD_(lexer, "int") || COYC_LEXER_ISKEYWORD_(lexer, "uint"))
-                lexer->token.kind = COYC_TK_TYPE;
-            else if(COYC_LEXER_ISKEYWORD_(lexer, "module"))
+            bool set = false;
+            for (size_t j = 0; j < sizeof(types) / sizeof(char*); j += 1) {
+                if (COYC_LEXER_ISKEYWORD_(lexer, types[j])) {
+                    lexer->token.kind = COYC_TK_TYPE;
+                    set = true;
+                    break;
+                }
+            }
+            if (set) {}
+            else if (COYC_LEXER_ISKEYWORD_(lexer, "module"))
                 lexer->token.kind = COYC_TK_MODULE;
             else if(COYC_LEXER_ISKEYWORD_(lexer, "import"))
                 lexer->token.kind = COYC_TK_IMPORT;
