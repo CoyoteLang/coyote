@@ -1,7 +1,7 @@
 #ifndef COY_FUNCTION_BUILDER_H_
 #define COY_FUNCTION_BUILDER_H_
 
-#include "vm/function2.h"
+#include "vm/function.h"
 
 #define COY_FUNCTION_BUILDER_CONST_TYPE_SYM_    0
 #define COY_FUNCTION_BUILDER_CONST_TYPE_REF_    1
@@ -17,7 +17,7 @@ struct coy_function_builder_block_
 };
 struct coy_function_builder_
 {
-    struct coy_function2_ func;
+    struct coy_function_ func;
     struct
     {
         struct coy_function_builder_const_sym_entry_* syms;
@@ -28,12 +28,10 @@ struct coy_function_builder_
     uint32_t curblock;  //< current "active" block
 };
 struct coy_function_builder_* coy_function_builder_init_(struct coy_function_builder_* builder, const struct coy_typeinfo_* type, uint32_t attrib);
-void coy_function_builder_finish_(struct coy_function_builder_* builder, struct coy_function2_* func);
+void coy_function_builder_finish_(struct coy_function_builder_* builder, struct coy_function_* func);
 void coy_function_builder_abort_(struct coy_function_builder_* builder);
 
 void coy_function_builder_useblock_(struct coy_function_builder_* builder, uint32_t block);
-struct coy_function_builder_block_* coy_function_builder_curbblock_(struct coy_function_builder_* builder);
-struct coy_function2_block_* coy_function_builder_curfblock_(struct coy_function_builder_* builder);
 union coy_instruction_* coy_function_builder_curinstr_(struct coy_function_builder_* builder);
 
 uint32_t coy_function_builder_block_(struct coy_function_builder_* builder, uint32_t nparams, const uint32_t* ptrs, size_t nptrs);

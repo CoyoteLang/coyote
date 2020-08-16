@@ -135,9 +135,9 @@ static void coy_op_handle_jmp_helper_(coy_context_t* ctx, struct coy_stack_segme
         union coy_register_ r = coy_slots_get_(&seg->slots, src, &isptr);
         coy_slots_set_(&seg->slots, dst, r, isptr);
     }
-    COY_CHECK(block < stbds_arrlenu(frame->function->blocks));
+    COY_CHECK(block < stbds_arrlenu(frame->function->u.coy.blocks));
     frame->block = block;
-    struct coy_function_block_* blockinfo = &frame->function->blocks[block];
+    struct coy_function_block_* blockinfo = &frame->function->u.coy.blocks[block];
     frame->bp = frame->fp + blockinfo->nparams;
     frame->pc = blockinfo->offset;
 }
@@ -237,11 +237,11 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
         struct coy_stack_frame_* frame = &seg->frames[stbds_arrlenu(seg->frames) - 1];
         struct coy_function_* func = frame->function;
         // TODO: we'll need to optimize this at some point ...
-        size_t slen = frame->bp + func->u.coy.maxregs;
+        size_t slen = frame->bp + func->u.coy.maxslots;
         coy_slots_setlen_(&seg->slots, slen);
-        if(!func->blocks)
+        if(func->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
         {
-            int32_t ret = func->u.cfunc(ctx);
+            int32_t ret = func->u.nat.handler(ctx, func->u.nat.udata);
             if(ret < 0)
                 abort();    // error in cfunc
             coy_context_pop_frame_(ctx);
@@ -249,20 +249,20 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
         }
         size_t nframes = stbds_arrlenu(seg->frames);
 #if COY_OP_TRACE_
-        printf("@function:%p (%" PRIu32 " params)\n", (void*)func, func->blocks[0].nparams);
+        printf("@function:%p (%" PRIu32 " params)\n", (void*)func, func->u.coy.blocks[0].nparams);
         uint32_t pblock = UINT32_MAX;
 #endif
         do // execute function; this loop is optional, but is done as an optimization
         {
             const union coy_instruction_* instr = &func->u.coy.instrs[frame->pc];
-            uint32_t dstreg = frame->bp + frame->pc - func->blocks[frame->block].offset;
+            uint32_t dstreg = frame->bp + frame->pc - func->u.coy.blocks[frame->block].offset;
 #if COY_OP_TRACE_
             {
                 if(pblock != frame->block)
                 {
                     pblock = frame->block;
                     printf(".block%" PRIu32 " (", pblock);
-                    for(uint32_t i = 0; i < func->blocks[frame->block].nparams; i++)
+                    for(uint32_t i = 0; i < func->u.coy.blocks[frame->block].nparams; i++)
                     {
                         if(i) putchar(' ');
                         bool isptr;
@@ -309,54 +309,6 @@ void coy_push_uint(coy_context_t* ctx, uint32_t u)
     coy_slots_setlen_(&seg->slots, coy_slots_getlen_(&seg->slots) + 1);
     union coy_register_ val = {.u32 = u};
     coy_slots_setval_(&seg->slots, coy_slots_getlen_(&seg->slots) - 1, val);
-}
-
-void vm_test_basicDBG(void)
-{
-    static const struct coy_function_block_ in_blocks[] = {
-        {2,0},
-        {1,11},
-    };
-    static const union coy_instruction_ in_instrs[] = {
-        //  BLOCK 0 (@0)
-        /*2*/   {.op={COY_OPCODE_ADD, COY_OPFLG_TYPE_UINT32, 0, 2}},
-        /*3*/   {.arg={0,0}},
-        /*4*/   {.arg={1,0}},
-        /*-*/   {.op={COY_OPCODE__DUMPU32, 0, 0, 3}},
-        /*-*/   {.arg={0,0}},
-        /*-*/   {.arg={1,0}},
-        /*-*/   {.arg={2,0}},
-        /*-*/   {.op={COY_OPCODE_JMP, 0, 0, 3}},
-        /*-*/   {.raw=1},
-        /*-*/   {.arg={0,0}},
-        /*-*/   {.arg={2,0}},
-
-        // BLOCK 1 (@11)
-        /*-*/   {.op={COY_OPCODE__DUMPU32, 0, 0, 1}},
-        /*-*/   {.arg={0,0}},
-        /*5*/   {.op={COY_OPCODE_RET, 0, 0, 1}},
-        /*6*/   {.arg={0,0}},
-    };
-
-    struct coy_function_ func = {NULL};
-    stbds_arrsetlen(func.blocks, sizeof(in_blocks) / sizeof(*in_blocks));
-    memcpy(func.blocks, in_blocks, sizeof(in_blocks));
-    stbds_arrsetlen(func.u.coy.instrs, sizeof(in_instrs) / sizeof(*in_instrs));
-    memcpy(func.u.coy.instrs, in_instrs, sizeof(in_instrs));
-    coy_function_update_maxregs_(&func);
-
-    coy_env_t env;
-    coy_env_init(&env);
-
-    coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &func, 2, false);
-    coy_push_uint(ctx, 5);
-    coy_push_uint(ctx, 7);
-    coy_vm_exec_frame_(ctx);
-
-    printf("RESULT: %" PRIu32 "\n", coy_slots_getval_(&ctx->top->slots, 0).u32);
-
-    //coy_env_deinit(&env);   //< not yet implemented
 }
 
 /*

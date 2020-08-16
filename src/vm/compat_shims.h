@@ -7,7 +7,7 @@
 #include "context.h"
 #include "env.h"
 #include "stack.h"
-#include "function.h"
+#include "compat_function.h"
 #include "register.h"
 #include "slots.h"
 
@@ -18,7 +18,7 @@
 // these are internal, which is why they end with '_' and had *no* typedef
 typedef union coy_instruction_ coy_instruction_t;
 typedef struct coy_function_block_ coy_function_block_t;
-typedef struct coy_function_ coy_function_t;
+typedef struct coy_compat_function_ coy_function_t;
 
 // temporary APIs
 void coy_push_uint(coy_context_t* ctx, uint32_t u);

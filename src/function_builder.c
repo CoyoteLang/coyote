@@ -36,6 +36,16 @@ struct coy_function_builder_* coy_function_builder_init_(struct coy_function_bui
     return builder;
 }
 
+static struct coy_function_builder_block_* coy_function_builder_curbblock_(struct coy_function_builder_* builder)
+{
+    COY_CHECK(builder->curblock < stbds_arrlenu(builder->blocks));
+    return &builder->blocks[builder->curblock];
+}
+static struct coy_function_block_* coy_function_builder_curfblock_(struct coy_function_builder_* builder)
+{
+    COY_CHECK(builder->curblock < stbds_arrlenu(builder->func.u.coy.blocks));
+    return &builder->func.u.coy.blocks[builder->curblock];
+}
 static void coy_function_builder_patch_constrefs_(struct coy_function_builder_* builder, const struct coy_function_builder_instr_ref_* constrefs, uint32_t cindex)
 {
     // patch the references *to* the constant
@@ -48,10 +58,10 @@ static void coy_function_builder_patch_constrefs_(struct coy_function_builder_* 
         block->instrs[constrefs[i].instr].arg.index = cindex;
     }
 }
-void coy_function_builder_finish_(struct coy_function_builder_* builder, struct coy_function2_* func)
+void coy_function_builder_finish_(struct coy_function_builder_* builder, struct coy_function_* func)
 {
     // copy consts over
-    struct coy_function2_constants_* fconsts = &builder->func.u.coy.consts;
+    struct coy_function_constants_* fconsts = &builder->func.u.coy.consts;
     size_t nsyms = stbds_shlenu(builder->consts.syms);
     size_t nrefs = stbds_hmlenu(builder->consts.refs);
     size_t nvals = stbds_hmlenu(builder->consts.vals);
@@ -86,7 +96,7 @@ void coy_function_builder_finish_(struct coy_function_builder_* builder, struct 
     for(size_t b = 0; b < stbds_arrlenu(builder->blocks); b++)
     {
         struct coy_function_builder_block_* bblock = &builder->blocks[b];
-        struct coy_function2_block_* fblock = &builder->func.u.coy.blocks[b];
+        struct coy_function_block_* fblock = &builder->func.u.coy.blocks[b];
         fblock->offset = ninstrs;
         size_t binstrs = stbds_arrlenu(bblock->instrs);
         memcpy(&builder->func.u.coy.instrs[ninstrs], bblock->instrs, binstrs * sizeof(union coy_instruction_));
@@ -113,16 +123,6 @@ void coy_function_builder_useblock_(struct coy_function_builder_* builder, uint3
     COY_ASSERT(block < stbds_arrlenu(builder->func.u.coy.blocks));
     builder->curblock = block;
 }
-struct coy_function_builder_block_* coy_function_builder_curbblock_(struct coy_function_builder_* builder)
-{
-    COY_CHECK(builder->curblock < stbds_arrlenu(builder->blocks));
-    return &builder->blocks[builder->curblock];
-}
-struct coy_function2_block_* coy_function_builder_curfblock_(struct coy_function_builder_* builder)
-{
-    COY_CHECK(builder->curblock < stbds_arrlenu(builder->func.u.coy.blocks));
-    return &builder->func.u.coy.blocks[builder->curblock];
-}
 union coy_instruction_* coy_function_builder_curinstr_(struct coy_function_builder_* builder)
 {
     struct coy_function_builder_block_* block = coy_function_builder_curbblock_(builder);
@@ -142,7 +142,7 @@ uint32_t coy_function_builder_block_(struct coy_function_builder_* builder, uint
     };
     stbds_arrput(builder->blocks, bblock);
     // initialize function block
-    struct coy_function2_block_ fblock = {
+    struct coy_function_block_ fblock = {
         .offset = stbds_arrlenu(builder->func.u.coy.instrs),
         .nparams = nparams,
         .ptrs = NULL,
@@ -159,7 +159,7 @@ uint32_t coy_function_builder_block_(struct coy_function_builder_* builder, uint
 uint32_t coy_function_builder_op_(struct coy_function_builder_* builder, uint8_t code, uint8_t flags, bool refresult)
 {
     struct coy_function_builder_block_* bblock = coy_function_builder_curbblock_(builder);
-    struct coy_function2_block_* fblock = coy_function_builder_curfblock_(builder);
+    struct coy_function_block_* fblock = coy_function_builder_curfblock_(builder);
     bblock->curinstr = stbds_arrlenu(bblock->instrs);
     uint32_t dstreg = fblock->nparams + bblock->curinstr;
     union coy_instruction_ instr = {.op={code, flags, 0, 0}};

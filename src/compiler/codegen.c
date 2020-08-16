@@ -75,7 +75,7 @@ static size_t coyc_gen_expr(coyc_cctx_t *ctx, coy_instruction_t **instrs, expres
 }
 
 // TODO: this is a PRIVATE API!
-void coy_function_update_maxregs_(struct coy_function_* func);
+void coy_function_update_maxregs_(struct coy_compat_function_* func);
 static void coyc_gen_func(coyc_cctx_t *ctx, function_t func) {
 
     ctx->func = &func;

@@ -20,7 +20,7 @@ typedef struct coy_context
     uint32_t index;                 //< thread index in thread list; not unique
     uint32_t id;                    //< thread ID; unique for a particular execution
     struct coy_stack_segment_* top; //< top (current) stack segment
-    struct coy_slots_ nslots;       //< slots for native<->Coyote calls
+    struct coy_slots_ slots;        //< slots for native<->Coyote calls, and as a scratch buffer
 } coy_context_t;
 
 coy_context_t* coy_context_create(struct coy_env* env);

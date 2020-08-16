@@ -128,12 +128,6 @@ TEST(parser)
     coyc_lexer_deinit(&lexer);
 }
 
-extern void vm_test_basicDBG(void);
-TEST(vm_basic)
-{
-    vm_test_basicDBG();
-}
-
 TEST(codegen)
 { 
     const char src[] =
@@ -186,34 +180,32 @@ const char *bad_srcs[] = {
     "module test;\n"
     "module 2;",
     "int a() {}",
+    "module factorial;\n"
+    "u32 factorial(uint num) {\n"
+    "\n"
+    "}\n"
 };
 
 const char *bad_parse_msgs[] = {
     "Expected identifier for module name!",
     "Duplicate module statement found!",
     "Missing a module statement!",
+    NULL,
 };
 
 const char *bad_comp_msgs[] = {
     NULL,
     NULL,
     NULL,
-};
-
-coy_function_t good_funcs[] = {
-    { .blocks = NULL, },
-    { .blocks = NULL, },
-    { .blocks = NULL, },
+    NULL,
 };
 
 TEST(semantic_analysis) {
     size_t src_size = sizeof(bad_srcs) / sizeof(*bad_srcs);
     size_t pmsg_size = sizeof(bad_parse_msgs) / sizeof(*bad_parse_msgs);
     size_t smsg_size = sizeof(bad_comp_msgs) / sizeof(*bad_comp_msgs);
-    size_t gmsg_size = sizeof(good_funcs) / sizeof(coy_function_t);
     PRECONDITION(src_size == pmsg_size && "Forgot to add a parser error message (or NULL)");
     PRECONDITION(src_size == smsg_size && "Forgot to add a compilation error message (or NULL)");
-    PRECONDITION(src_size == gmsg_size && "Forgot to add a coy_function_t ");
     for (size_t i = 0; i < sizeof(bad_srcs) / sizeof(*bad_srcs); i += 1) {
         PRECONDITION(bad_srcs[i]);
         coyc_lexer_t lexer;
@@ -227,7 +219,13 @@ TEST(semantic_analysis) {
         if (!pctx.err_msg) {
             // Parser is good, let's check semalysis
             coyc_tree_free(&pctx);
-            ASSERT_TODO("IMPLEMENT");
+
+            switch (i) {
+                case 3:
+                    //ASSERT_EQ_INT)
+                    //break;
+                default: ASSERT_TODO("semalysis test%lu", i);
+            }
         //    coyc_sctx_t *sctx = coyc_semalysis(&root);
 //            ASSERT(sctx);
   //          ASSERT_EQ_STR(sctx->err_msg, bad_comp_msgs[i]);
@@ -239,125 +237,57 @@ TEST(semantic_analysis) {
     }
 }
 
-TEST(vm_jmpc)
+TEST(vm_basic)
 {
-/*
-uint factorial(uint num, uint const1=1)
-{
-    uint acc = const1;
-    while(num > 0)
-    {
-        acc = acc * num;
-        num = num - const1;
-    }
-    return acc;
-}
-----------
-u32 factorial(u32 num, u32 const1)
-.0_entry(num,const1):
-    jmp .1_test($0, $1, $1)
-.1_test(num,const1,acc):
-    $3 = sub $1, $1         ; ... we need a `0` ...
-    jmpc lt $3, $0,         ;0 < num
-        .2_loop($0,$1,$2),
-        .3_end($2)
-.2_loop(num,const1,acc):
-    $3 = mul $2, $0
-    $6 = sub $0, $1
-    jmp .1_test($6, $1, $3)
-.3_end(acc):
-    ret $0
-*/
-
-/*
-jmpc encoding for `jmpc lt $a, $b, .X($1,$2), .Y($3,$4)`:
-    OP:     op=jmpc flags=TYPE_x | CMP_LT               ; CMP is one of EQ, NE, LT, LE
-    ARG:    reg=$a
-    ARG:    reg=$b
-    ARG:    immediate=.X                                ; encoded directly (not a reg)
-    ARG:    immediate=.Y                                ; encoded directly (not a reg)
-    ARG:    immediate=moves_sep                         ; end of .X, start of .Y
-    ARG:    <arbitrary amount of pairs of moves>
-    ; .X's parameters are in args: [5,5+moves_sep)
-    ; .Y's parameters are in args: [5+moves_sep,nargs)
-*/
+    static const struct coy_typeinfo_ ti_int = {
+        COY_TYPEINFO_CAT_INTEGER_,
+        {.integer={
+            .is_signed=true,
+            .width=32,
+        }},
+        NULL, NULL,
+    };
+    static const struct coy_typeinfo_* const ti_params_int_int[] = {
+        &ti_int,
+        &ti_int,
+        NULL,
+    };
+    static const struct coy_typeinfo_ ti_function_int_int_int = {
+        COY_TYPEINFO_CAT_FUNCTION_,
+        {.function={
+            .rtype = &ti_int,
+            .ptypes = ti_params_int_int,
+        }},
+        NULL, NULL,
+    };
 
     static const struct coy_function_block_ in_blocks[] = {
-        {2,0},  //entry
-        {3,4},  //test
-        {3,15}, //loop
-        {1,27}, //end
+        {0,2,NULL},  //entry
     };
     static const union coy_instruction_ in_instrs[] = {
         //.0_entry(2)   @0
-        /*-*/   {.op={COY_OPCODE_JMP, 0, 0, 3}},
-        /*-*/   {.raw=1},
-        /*-*/   {.arg={2,0}},
+        /*-*/   {.op={COY_OPCODE_ADD, COY_OPFLG_TYPE_UINT32, 0, 2}},
+        /*-*/   {.arg={0,0}},
         /*-*/   {.arg={1,0}},
-
-        //.1_test(3)    @4
-        /*3*/   {.op={COY_OPCODE_SUB, COY_OPFLG_TYPE_UINT32, 0, 2}},
-        /*4*/   {.arg={1,0}},
-        /*5*/   {.arg={1,0}},
-        /*-*/   {.op={COY_OPCODE_JMPC, COY_OPFLG_TYPE_UINT32|COY_OPFLG_CMP_LT, 0, 7}},
-        /*-*/   {.arg={3,0}},
-        /*-*/   {.arg={0,0}},
-        /*-*/   {.raw=2},
-        /*-*/   {.raw=3},
-        /*-*/   {.raw=0},
-        /*-*/   {.arg={0,0}},
-        /*-*/   {.arg={2,0}},
-
-        //.2_loop(3)    @15
-        /*3*/   {.op={COY_OPCODE_MUL, COY_OPFLG_TYPE_UINT32, 0, 2}},
-        /*4*/   {.arg={2,0}},
-        /*5*/   {.arg={0,0}},
-        /*6*/   {.op={COY_OPCODE_SUB, COY_OPFLG_TYPE_UINT32, 0, 2}},
-        /*7*/   {.arg={0,0}},
-        /*8*/   {.arg={1,0}},
-        /*-*/   {.op={COY_OPCODE_JMP, 0, 0, 5}},
-        /*-*/   {.raw=1},
-        /*-*/   {.arg={0,0}},
-        /*-*/   {.arg={6,0}},
-        /*-*/   {.arg={2,0}},
-        /*-*/   {.arg={3,0}},
-
-        //.3_end(1)     @27
         /*-*/   {.op={COY_OPCODE_RET, 0, 0, 1}},
-        /*-*/   {.arg={0,0}},
-
-/*
-u32 factorial(u32 num, u32 const1)
-.0_entry(num,const1):
-    jmp .1_test($0, $1, $1)
-.1_test(num,const1,acc):
-    $3 = sub $1, $1         ; ... we need a `0` ...
-    jmpc lt $3, $0,         ;0 < num
-        .2_loop($0,$1,$2),
-        .3_end($2)
-.2_loop(num,const1,acc):
-    $3 = mul $2, $0
-    $6 = sub $0, $1
-    jmp .1_test($6, $1, $3)
-.3_end(acc):
-    ret $0
-*/
+        /*-*/   {.arg={2,0}},
     };
 
-    struct coy_function_ func = {NULL};
-    stbds_arrsetlen(func.blocks, sizeof(in_blocks) / sizeof(*in_blocks));
-    memcpy(func.blocks, in_blocks, sizeof(in_blocks));
+    struct coy_function_ func;
+    coy_function_init_empty_(&func, &ti_function_int_int_int, 0);
+    stbds_arrsetlen(func.u.coy.blocks, sizeof(in_blocks) / sizeof(*in_blocks));
+    memcpy(func.u.coy.blocks, in_blocks, sizeof(in_blocks));
     stbds_arrsetlen(func.u.coy.instrs, sizeof(in_instrs) / sizeof(*in_instrs));
     memcpy(func.u.coy.instrs, in_instrs, sizeof(in_instrs));
-    coy_function_update_maxregs_(&func);
+    coy_function_coy_compute_maxslots_(&func);
 
     coy_env_t env;
     coy_env_init(&env);
 
     coy_context_t* ctx = coy_context_create(&env);
     coy_context_push_frame_(ctx, &func, 2, false);
-    coy_push_uint(ctx, 6);
-    coy_push_uint(ctx, 1);
+    coy_push_uint(ctx, 5);
+    coy_push_uint(ctx, 7);
     coy_vm_exec_frame_(ctx);
 
     printf("RESULT: %" PRIu32 "\n", coy_slots_getval_(&ctx->top->slots, 0).u32);
@@ -449,7 +379,7 @@ u32 factorial(u32 num)
             coy_function_builder_arg_reg_(&builder, 0);
     }
 
-    struct coy_function2_ func;
+    struct coy_function_ func;
     coy_function_builder_finish_(&builder, &func);
     ASSERT(coy_function_verify_(&func));
 }
@@ -460,8 +390,7 @@ int main()
     TEST_EXEC(parser);
     TEST_EXEC(semantic_analysis);
     TEST_EXEC(vm_basic);
-    TEST_EXEC(vm_jmpc);
-    TEST_EXEC(codegen);
+    TEST_SKIP(codegen, "TODO: Update codegen to use function builder");
     TEST_EXEC(function_builder_verify);
     return TEST_REPORT();
 }
