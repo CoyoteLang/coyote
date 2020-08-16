@@ -72,7 +72,7 @@ static void parse_module(coyc_pctx_t *ctx)
 
 static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec);
 
-static expression_value_t compute_atom(coyc_pctx_t *ctx, unsigned int minimum_prec) {
+static expression_value_t compute_atom(coyc_pctx_t *ctx) {
     if (ctx->token_index > arrlenu(ctx->tokens)) {
         ERROR("Unexpected EOF!");
     }
@@ -196,7 +196,7 @@ static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
 static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec) {
     (void)minimum_prec;
     expression_t *expr = malloc(sizeof(expression_t));
-    expr->lhs = compute_atom(ctx, minimum_prec);
+    expr->lhs = compute_atom(ctx);
     expr->rhs.type = none;
     // TODO
     expr->type.type = no_type;
