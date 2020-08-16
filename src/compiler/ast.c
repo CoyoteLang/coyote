@@ -31,17 +31,6 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_pctx_t *ctx, con
 
 #define ERROR(msg) do { errorf(ctx, "%s", msg); } while (0);
 
-static COY_HINT_NORETURN void error_token(coyc_pctx_t *ctx, coyc_token_t token, const char *fmt) {
-    char buf[128];
-    size_t len = token.len < 128 ? token.len : 127;
-    strncpy(buf, token.ptr, len);
-    buf[len] = 0;
-    if (token.len != len) {
-        fprintf(stderr, "Warning: token len exceeded 128, truncated.\n");
-    }
-    errorf(ctx, fmt, buf);
-}
-
 static type_t coyc_type(coyc_token_t token) {
     type_t type;
     type.type = no_type;
