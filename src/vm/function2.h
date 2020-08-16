@@ -52,6 +52,7 @@ struct coy_function2_
 };
 
 // NOTE: `data` is assumed to be uint64_t-aligned
+struct coy_function2_* coy_function_init_empty_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib);
 struct coy_function2_* coy_function_init_data_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib, const void* data, size_t datalen);
 struct coy_function2_* coy_function_init_native_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib, coy_c_function_t* handler, void* udata);
 

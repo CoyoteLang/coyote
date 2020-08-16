@@ -8,6 +8,7 @@
 
 // temporary (for COY_VERIFY_, will be moved elsewhere eventually)
 #include <stdio.h>
+#include <inttypes.h>
 
 /*
 // Constants are always stored in the following order (to simplify the linker & GC):
@@ -205,14 +206,38 @@ static void coy_function_compute_maxslots_(struct coy_function2_* func)
 }
 
 // TODO: maybe this should be elsewhere?
-#define COY_VERIFY_FAIL_(...)   do { fprintf(stderr, "Function verify fail(%s:%d): ", __FILE__, __LINE__); fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n"); return false; } while(0)
+#define COY_VERIFY_FAIL_(...)   \
+    do {                        \
+        fprintf(stderr, "Function verify fail(%s:%d): ", __FILE__, __LINE__);   \
+        fprintf(stderr, __VA_ARGS__);   \
+        fprintf(stderr, "\n");  \
+        /*return false;          */abort(); \
+    } while(0)
 #define COY_VERIFY_(test, ...)  do { if(!(test)) COY_VERIFY_FAIL_(__VA_ARGS__); } while(0)
 #define COY_VERIFY_ARGIDX_(A)   COY_VERIFY_((A) < block->nparams + i, "argument tries to read from a future value %u", (A))
 #define COY_VERIFY_REGVAL_(I)   COY_VERIFY_(!coy_bitarray_get(&isptr, block->nparams + (I)), "register %u: expected value type, found reference", (I))
 #define COY_VERIFY_REGREF_(I)   COY_VERIFY_(coy_bitarray_get(&isptr, block->nparams + (I)), "register %u: expected reference type, found value", (I))
 #define COY_VERIFY_ARGIDXA_(A)   COY_VERIFY_ARGIDX_(instr[1+(A)].arg.index)
-#define COY_VERIFY_REGVALA_(A)   do { COY_VERIFY_ARGIDXA_(A); COY_VERIFY_REGVAL_(instr[1+(A)].arg.index); } while(0)
-#define COY_VERIFY_REGREFA_(A)   do { COY_VERIFY_ARGIDXA_(A); COY_VERIFY_REGREF_(instr[1+(A)].arg.index); } while(0)
+#define COY_VERIFY_REGVALA_(A)  \
+    do {                        \
+        union coy_instruction_ instrVERIFY = instr[1+(A)];  \
+        if(instrVERIFY.arg.isconst)                         \
+            COY_VERIFY_(func->u.coy.consts.nsymbols + func->u.coy.consts.nrefs <= instrVERIFY.arg.index, "constant %u: expected value type, found reference", instrVERIFY.arg.index);   \
+        else {                      \
+            COY_VERIFY_ARGIDXA_(A); \
+            COY_VERIFY_REGVAL_(instr[1+(A)].arg.index); \
+        }                           \
+    } while(0)
+#define COY_VERIFY_REGREFA_(A)  \
+    do {                        \
+        union coy_instruction_ instrVERIFY = instr[1+(A)];  \
+        if(instrVERIFY.arg.isconst)                         \
+            COY_VERIFY_(instrVERIFY.arg.index < func->u.coy.consts.nsymbols + func->u.coy.consts.nrefs, "constant %u: expected reference type, found value", instrVERIFY.arg.index);   \
+        else {                      \
+            COY_VERIFY_ARGIDXA_(A); \
+            COY_VERIFY_REGREF_(instr[1+(A)].arg.index); \
+        }                           \
+    } while(0)
 
 static bool coy_function_verify_jmp_block_(struct coy_function2_* func, const struct coy_function2_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr, uint32_t jmpb, uint32_t ahead, uint32_t atail)
 {
@@ -236,7 +261,7 @@ static bool coy_function_verify_jmp_block_(struct coy_function2_* func, const st
         if(coy_bitarray_get(&jmpisptr, a))
             COY_VERIFY_REGREFA_(ahead+a);
         else
-            COY_VERIFY_REGVALA_(atail+a);
+            COY_VERIFY_REGVALA_(ahead+a);
     }
     return true;
 }
@@ -254,7 +279,7 @@ static bool coy_function_verify_jmp_(struct coy_function2_* func, const struct c
 static bool coy_function_verify_jmpc_(struct coy_function2_* func, const struct coy_function2_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
 {
     COY_VERIFY_(instr->op.nargs >= 5, "jmpc needs two registers, two block indices, and separator");
-    if(instr->op.flags & COY_OPFLG_POINTER)
+    if((instr->op.flags & COY_OPFLG_POINTER) == COY_OPFLG_POINTER)
     {
         COY_VERIFY_REGREFA_(0);
         COY_VERIFY_REGREFA_(1);
@@ -356,10 +381,10 @@ static bool coy_function_coy_verify_(struct coy_function2_* func)
             coy_bitarray_set(&isptr, block->nparams + block->ptrs[p], true);
 
         const union coy_instruction_* instrs = &func->u.coy.instrs[block->offset];
-        for(uint32_t i = 0; i < length; i += instrs[i].op.nargs)
+        for(uint32_t i = 0; i < length; i += 1 + instrs[i].op.nargs)
         {
             const union coy_instruction_* instr = &instrs[i];
-            COY_VERIFY_(i + instr->op.nargs <= length, "instruction arguments out of bounds");
+            COY_VERIFY_(i + instr->op.nargs <= length, "instruction arguments out of bounds (remaining length: %" PRIu32 ", # of args: %" PRIu32 ")", length - i, instr->op.nargs);
             const struct coy_function_verify_opinfo_* opinfo = &coy_opinfos_[instr->op.code];
             COY_VERIFY_(opinfo->verify, "invalid instruction 0x%.2X", instr->op.code);
             if(i + instr->op.nargs == length)    //< if last instruction
@@ -375,12 +400,32 @@ static bool coy_function_coy_verify_(struct coy_function2_* func)
     return true;
 }
 
-struct coy_function2_* coy_function_init_data_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib, const void* data, size_t datalen)
+struct coy_function2_* coy_function_init_empty_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib)
 {
     if(!func) return NULL;
+    func->type = type;
+    func->attrib = attrib;
+    if(attrib & COY_FUNCTION_ATTRIB_NATIVE_)
+    {
+        func->u.nat.handler = NULL;
+        func->u.nat.udata = NULL;
+    }
+    else
+    {
+        func->u.coy.consts.nrefs = 0;
+        func->u.coy.consts.nsymbols = 0;
+        func->u.coy.consts.data = NULL;
+        func->u.coy.blocks = NULL;
+        func->u.coy.instrs = NULL;
+        func->u.coy.maxslots = 0;
+    }
+    return func;
+}
+struct coy_function2_* coy_function_init_data_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib, const void* data, size_t datalen)
+{
+    if(!coy_function_init_empty_(func, type, attrib)) return NULL;
     if(!COY_ENSURE(!(attrib & COY_FUNCTION_ATTRIB_NATIVE_), "misuse: cannot create a Coyote function with a `native` attribute"))
         return NULL;
-    func->type = type;
 
     struct coy_memio_ memio = {
         .data = data,
@@ -393,8 +438,6 @@ struct coy_function2_* coy_function_init_data_(struct coy_function2_* func, cons
     if(!coy_function_read_instrs_(func, &memio)) COY_TODO("free memory on error");
     coy_function_compute_maxslots_(func);
     if(!coy_function_coy_verify_(func)) COY_TODO("free memory on error");
-
-    func->attrib = attrib;
     return func;
 }
 struct coy_function2_* coy_function_init_native_(struct coy_function2_* func, const struct coy_typeinfo_* type, uint32_t attrib, coy_c_function_t* handler, void* udata)
