@@ -8,6 +8,7 @@ enum coy_typeinfo_category_
     COY_TYPEINFO_CAT_INTERNAL_,  //< should never, ever show up in user code
     COY_TYPEINFO_CAT_NORETURN_,
     COY_TYPEINFO_CAT_INTEGER_,
+    COY_TYPEINFO_CAT_FUNCTION_,
 };
 struct coy_typeinfo_
 {
@@ -15,7 +16,16 @@ struct coy_typeinfo_
     union
     {
         const char* internal_name;  // for debugging
-        struct { uint8_t is_signed; uint8_t width; } integer;
+        struct
+        {
+            uint8_t is_signed;
+            uint8_t width;
+        } integer;
+        struct
+        {
+            const struct coy_typeinfo_* rtype;  //< return type
+            const struct coy_typeinfo_* const* ptypes;//< param types
+        } function;
     } u;
     coy_gc_mark_function_* cb_mark;
     coy_gc_dtor_function_* cb_dtor;
