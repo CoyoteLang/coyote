@@ -170,5 +170,6 @@ char *coyc_semalysis(ast_root_t *root) {
         }
     }
 
+    free(ctx);
     return NULL;
 }

@@ -132,3 +132,13 @@ coyc_cctx_t coyc_codegen(ast_root_t *root) {
     }
     return ctx;
 }
+
+void coyc_cg_free(coyc_cctx_t ctx) {
+    for (int i = 0; i < arrlen(ctx.module->functions); i += 1) {
+        coy_function_t func = ctx.module->functions[i];
+        arrfree(func.blocks);
+        arrfree(func.u.coy.instrs);
+    }
+    arrfree(ctx.module->functions);
+    free(ctx.module);
+}

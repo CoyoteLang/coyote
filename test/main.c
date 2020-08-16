@@ -159,6 +159,9 @@ TEST(codegen)
     ASSERT(cctx.module);
     ASSERT(cctx.module->functions);
 
+    coyc_tree_free(&pctx);
+    coyc_lexer_deinit(&lexer);
+
     coy_env_t env;
     coy_env_init(&env);
 
@@ -171,6 +174,8 @@ TEST(codegen)
     coy_vm_exec_frame_(ctx);
 
     ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
+
+    coyc_cg_free(cctx);
 
   //  coy_env_deinit(&env);   //< not yet implemented
 }
@@ -210,16 +215,17 @@ TEST(semantic_analysis) {
     PRECONDITION(src_size == gmsg_size && "Forgot to add a coy_function_t ");
     for (size_t i = 0; i < sizeof(bad_srcs) / sizeof(*bad_srcs); i += 1) {
         PRECONDITION(bad_srcs[i]);
-        coyc_pctx_t pctx;
-        ast_root_t root;
         coyc_lexer_t lexer;
         PRECONDITION(coyc_lexer_init(&lexer, "<semalysis_test>", bad_srcs[i], strlen(bad_srcs[i])));
+        ast_root_t root;
+        coyc_pctx_t pctx;
         pctx.lexer = &lexer;
         pctx.root = &root;
         coyc_parse(&pctx);
         ASSERT_EQ_STR(pctx.err_msg, bad_parse_msgs[i]);
         if (!pctx.err_msg) {
             // Parser is good, let's check semalysis
+            coyc_tree_free(&pctx);
             ASSERT_TODO("IMPLEMENT");
         //    coyc_sctx_t *sctx = coyc_semalysis(&root);
 //            ASSERT(sctx);
@@ -228,6 +234,7 @@ TEST(semantic_analysis) {
         else {
             PRECONDITION(!bad_comp_msgs[i]);
         }
+        coyc_lexer_deinit(&lexer);
     }
 }
 

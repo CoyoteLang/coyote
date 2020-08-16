@@ -13,5 +13,6 @@ typedef struct {
 } coyc_cctx_t;
 
 coyc_cctx_t coyc_codegen(ast_root_t *root);
+void coyc_cg_free(coyc_cctx_t ctx);
 
 #endif

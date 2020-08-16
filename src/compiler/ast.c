@@ -389,6 +389,22 @@ void coyc_parse(coyc_pctx_t *ctx)
 
 }
 
+static void coyc_expr_free(expression_t *expr);
+static void coyc_exprv_free(expression_value_t val) {
+    if (val.type == expression) {
+        coyc_expr_free(val.expression.expression);
+    }
+    if (val.type == identifier) {
+        free(val.identifier.name);
+    }
+}
+
+static void coyc_expr_free(expression_t *expr) {
+    coyc_exprv_free(expr->lhs);
+    coyc_exprv_free(expr->rhs);
+    free(expr);
+}
+
 void coyc_tree_free(coyc_pctx_t *ctx)
 {
     arrfree(ctx->tokens);
@@ -408,8 +424,23 @@ void coyc_tree_free(coyc_pctx_t *ctx)
                 decl->base.name = NULL;
                 if (decl->base.type == function) {
                     if (decl->function.statements) {
+                        for (int j = 0; j < arrlen(decl->function.statements); j += 1) {
+                            statement_t statement = decl->function.statements[j];
+                            switch (statement.type) {
+                            case return_:
+                                coyc_expr_free(statement.return_.value);
+                                break;
+                            default:
+                                COY_TODO("cleanup more statements");
+                            }
+                        }
                         arrfree(decl->function.statements);
                     }
+                    for (int j = 0; j < arrlen(decl->function.parameters); j += 1) {
+                        parameter_t p = decl->function.parameters[j];
+                        free(p.name);
+                    }
+                    arrfree(decl->function.parameters);
                 }
             }
             arrfree(ctx->root->decls);
