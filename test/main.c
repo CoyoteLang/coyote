@@ -2,6 +2,7 @@
 #include "compiler/ast.h"
 #include "compiler/semalysis.h"
 #include "compiler/codegen.h"
+#include "function_builder.h"
 
 #include "bytecode.h"
 
@@ -364,6 +365,95 @@ u32 factorial(u32 num, u32 const1)
     //coy_env_deinit(&env);   //< not yet implemented
 }
 
+TEST(function_builder_verify)
+{
+    static const struct coy_typeinfo_ ti_int = {
+        COY_TYPEINFO_CAT_INTEGER_,
+        {.integer={
+            .is_signed=true,
+            .width=32,
+        }},
+        NULL, NULL,
+    };
+    static const struct coy_typeinfo_* const ti_params_int[] = {
+        &ti_int,
+        NULL,
+    };
+    static const struct coy_typeinfo_ ti_function_int_int = {
+        COY_TYPEINFO_CAT_FUNCTION_,
+        {.function={
+            .rtype = &ti_int,
+            .ptypes = ti_params_int,
+        }},
+        NULL, NULL,
+    };
+
+    struct coy_function_builder_ builder;
+    PRECONDITION(coy_function_builder_init_(&builder, &ti_function_int_int, 0));
+
+/*
+u32 factorial(u32 num)
+.0_entry(num):
+    jmp .1_test($0, 1)
+.1_test(num,acc):
+    jmpc lt 0, $0,
+        .2_loop($0,$1),
+        .3_end($1)
+.2_loop(num,acc):
+    $2 = sub $0, 1
+    $5 = mul $0, $1
+    jmp .1_test($2, $5)
+.3_end(acc):
+    ret $0
+*/
+    uint32_t b0_entry = coy_function_builder_block_(&builder, 1, NULL, 0);
+    uint32_t b1_test = coy_function_builder_block_(&builder, 2, NULL, 0);
+    uint32_t b2_loop = coy_function_builder_block_(&builder, 2, NULL, 0);
+    uint32_t b3_end = coy_function_builder_block_(&builder, 1, NULL, 0);
+
+    coy_function_builder_useblock_(&builder, b0_entry);
+    {
+        coy_function_builder_op_(&builder, COY_OPCODE_JMP, 0, false);
+            coy_function_builder_arg_imm_(&builder, b1_test);
+            coy_function_builder_arg_reg_(&builder, 0);
+            coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=1});
+    }
+    coy_function_builder_useblock_(&builder, b1_test);
+    {
+        coy_function_builder_op_(&builder, COY_OPCODE_JMPC, COY_OPFLG_CMP_LT|COY_OPFLG_TYPE_UINT32, false);
+            coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=0});
+            coy_function_builder_arg_reg_(&builder, 0);
+            coy_function_builder_arg_imm_(&builder, b2_loop);
+            coy_function_builder_arg_imm_(&builder, b3_end);
+            coy_function_builder_arg_imm_(&builder, 2);
+            coy_function_builder_arg_reg_(&builder, 0);
+            coy_function_builder_arg_reg_(&builder, 1);
+            coy_function_builder_arg_reg_(&builder, 1);
+    }
+    coy_function_builder_useblock_(&builder, b2_loop);
+    {
+        uint32_t sub = coy_function_builder_op_(&builder, COY_OPCODE_SUB, COY_OPFLG_TYPE_UINT32, false);
+            coy_function_builder_arg_reg_(&builder, 0);
+            coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=1});
+        uint32_t mul = coy_function_builder_op_(&builder, COY_OPCODE_MUL, COY_OPFLG_TYPE_UINT32, false);
+            coy_function_builder_arg_reg_(&builder, 0);
+            coy_function_builder_arg_reg_(&builder, 1);
+        coy_function_builder_op_(&builder, COY_OPCODE_JMP, 0, false);
+            coy_function_builder_arg_imm_(&builder, b1_test);
+            coy_function_builder_arg_reg_(&builder, sub);
+            coy_function_builder_arg_reg_(&builder, mul);
+    }
+    coy_function_builder_useblock_(&builder, b3_end);
+    {
+        coy_function_builder_op_(&builder, COY_OPCODE_RET, 0, false);
+            coy_function_builder_arg_reg_(&builder, 0);
+    }
+
+    struct coy_function2_ func;
+    coy_function_builder_finish_(&builder, &func);
+    ASSERT(coy_function_verify_(&func));
+}
+
 int main()
 {
     TEST_EXEC(lexer);
@@ -372,5 +462,6 @@ int main()
     TEST_EXEC(vm_basic);
     TEST_EXEC(vm_jmpc);
     TEST_EXEC(codegen);
+    TEST_EXEC(function_builder_verify);
     return TEST_REPORT();
 }
