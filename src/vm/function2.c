@@ -10,49 +10,6 @@
 #include <stdio.h>
 #include <inttypes.h>
 
-/*
-// Constants are always stored in the following order (to simplify the linker & GC):
-// - symbols
-// - reference constants
-// - other constants
-// Order *within* a group of constants is arbitrary.
-struct coy_function2_constants_
-{
-    uint32_t nsymbols;  //< how many constants are symbols?
-    uint32_t nrefs;     //< how many constants are references?
-    // (remaining constants are simple values)
-    union coy_register_* values;    //< values themselves
-};
-
-// this will eventually replace coy_function_
-struct coy_function2_block_
-{
-    uint32_t nparams;   //< number of parameters
-    uint32_t offset;    //< offset to start of block (entry block must start at 0!)
-    uint32_t* ptrs;     //< which registers are pointers?
-};
-struct coy_function2_
-{
-    const struct coy_typeinfo_* type;   //< this is a function type, *not* return type
-    union
-    {
-        struct
-        {
-            struct coy_function2_constants_ consts;
-            struct coy_function2_block_* blocks;
-            union coy_instruction_* instrs;
-            uint32_t maxregs;
-        } coy;
-        struct
-        {
-            coy_c_function_t* handler;
-            void* udata;
-        } nat;
-    } u;
-    uint32_t attrib;
-};
-*/
-
 struct coy_memio_
 {
     const uint8_t* data;
