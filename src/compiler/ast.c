@@ -31,18 +31,20 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_pctx_t *ctx, con
 
 #define ERROR(msg) do { errorf(ctx, "%s", msg); } while (0);
 
-static type_t coyc_type(coyc_token_t token) {
-    type_t type;
-    type.type = no_type;
+static struct coy_typeinfo_ coyc_type(coyc_token_t token) {
+    struct coy_typeinfo_ type;
+    type.category = COY_TYPEINFO_CAT_INTERNAL_;
     if (strncmp(token.ptr, "int", token.len) == 0) {
-        type.type = primitive;
-        type.primitive.primitive = _int;
+        type.category = COY_TYPEINFO_CAT_INTEGER_;
+        type.u.integer.is_signed = true;
+        type.u.integer.width = 32;
     }
     if (!strncmp(token.ptr, "uint", token.len) || !strncmp(token.ptr, "u32", token.len)) {
-        type.type = primitive;
-        type.primitive.primitive = uint;
+        type.category = COY_TYPEINFO_CAT_INTEGER_;
+        type.u.integer.is_signed = false;
+        type.u.integer.width = 32;
     }
-    if (type.type == no_type) {
+    if (type.category == COY_TYPEINFO_CAT_INTERNAL_) {
         COY_TODO("parse more types");
     }
     return type;
@@ -93,10 +95,8 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx) {
     if (token.kind == COYC_TK_INTEGER) {
         expression_value_t val;
         val.literal.type = literal;
-        val.literal.value.integer.type.type = primitive;
-        val.literal.value.integer.type.primitive.primitive = int_literal;
         // TODO: error checking
-        sscanf(token.ptr, "%" SCNu64, &val.literal.value.integer.value);
+        sscanf(token.ptr, "%" SCNi64, &val.literal.value.integer.value);
         ctx->token_index += 1;
         return val;
     }
@@ -188,7 +188,8 @@ static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
             default:
                 ERROR("UNREACHABLE");
             }
-            expr->type = expr->lhs.literal.value.integer.type;
+            // This should be resolved by sema into an appropriate integral type
+            expr->type.category = COY_TYPEINFO_CAT_INTERNAL_;
             expr->rhs.type = none;
         }
 }
@@ -199,7 +200,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
     expr->lhs = compute_atom(ctx);
     expr->rhs.type = none;
     // TODO
-    expr->type.type = no_type;
+    expr->type.category = COY_TYPEINFO_CAT_INTERNAL_;
     while (true) {
         coyc_token_t token = ctx->tokens[ctx->token_index];
         if (token.kind == COYC_TK_SCOLON) {
@@ -216,7 +217,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
             expr->lhs.expression.type = expression;
             expr->lhs.expression.expression = subexpr;
             expr->rhs.type = none;
-            expr->type.type = no_type;
+            expr->type.category = COY_TYPEINFO_CAT_INTERNAL_;
         }
         expr->op = token;
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
@@ -266,14 +267,15 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
 }
 
 /// token_index must mark the first token after the LPAREN
-static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
+static void parse_function(coyc_pctx_t *ctx, struct coy_typeinfo_ return_type, char *ident)
 {
     decl_t decl;
     decl.function.base.type = function;
     decl.function.base.name = ident;
     decl.function.statements = NULL;
     decl.function.parameters = NULL;
-    decl.function.return_type = type;
+    decl.function.return_type = return_type;
+    decl.function.type.category = COY_TYPEINFO_CAT_INTERNAL_;
     coyc_token_t token = ctx->tokens[ctx->token_index];
     while (token.kind == COYC_TK_TYPE || token.kind == COYC_TK_COMMA) {
         coyc_token_kind_t expected = arrlenu(decl.function.parameters) == 0 ? COYC_TK_TYPE : COYC_TK_COMMA;
@@ -289,7 +291,7 @@ static void parse_function(coyc_pctx_t *ctx, type_t type, char *ident)
             ctx->token_index += 1;
             token = ctx->tokens[ctx->token_index];
         }
-        type_t type = coyc_type(token);
+        struct coy_typeinfo_ type = coyc_type(token);
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
         if (token.kind != COYC_TK_IDENT) {
@@ -322,7 +324,7 @@ static void parse_decl(coyc_pctx_t *ctx)
 {
     coyc_token_t token = ctx->tokens[ctx->token_index];
     if (token.kind == COYC_TK_TYPE) {
-        const type_t type = coyc_type(token);
+        const struct coy_typeinfo_ type = coyc_type(token);
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
         if (token.kind == COYC_TK_IDENT) {

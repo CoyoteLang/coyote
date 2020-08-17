@@ -105,23 +105,21 @@ TEST(parser)
     function_t func = decl.function;
     ASSERT(func.base.name);
     ASSERT_EQ_STR(func.base.name, "foo");
-    ASSERT_EQ_INT(func.return_type.type, primitive);
-    ASSERT_EQ_INT(func.return_type.primitive.primitive, _int);
+    // Function types aren't resolved until sema runs
+    ASSERT_EQ_INT(func.type.category, COY_TYPEINFO_CAT_INTERNAL_);
+    ASSERT_EQ_INT(func.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
+    ASSERT_EQ_INT(func.return_type.u.integer.is_signed, true);
+    ASSERT_EQ_INT(func.return_type.u.integer.width, 32);
     ASSERT(func.statements);
     ASSERT_EQ_UINT(arrlen(func.statements), 1);
     statement_t stmt = func.statements[0];
     ASSERT_EQ_INT(stmt.type, return_);
     ASSERT(stmt.return_.value);
     ASSERT_EQ_INT(stmt.return_.value->lhs.type, literal);
-    ASSERT(stmt.return_.value->lhs.type == literal);
-    // If rhs.type is none, the value is just the lhs, and op is 
     ASSERT_EQ_INT(stmt.return_.value->rhs.type, none);
-    ASSERT_EQ_INT(stmt.return_.value->type.type, primitive);
-    ASSERT_EQ_INT(stmt.return_.value->type.primitive.primitive, int_literal);
-    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.type, primitive);
-    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.type.primitive.primitive, int_literal);
+    // Integer type isn't resolved until sema runs
+    ASSERT_EQ_INT(stmt.return_.value->type.category, COY_TYPEINFO_CAT_INTERNAL_);
     ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.value, 0);
-
     // Finally, clean up. Note that I only do this so Valgrind doesn't complain;
     // this will be handled by the OS anyways.
     coyc_tree_free(&ctx);
@@ -175,7 +173,7 @@ TEST(codegen)
   //  coy_env_deinit(&env);   //< not yet implemented
 }
 
-const char *bad_srcs[] = {
+const char *sema_test_srcs[] = {
     "module 1;",
     "module test;\n"
     "module 2;",
@@ -193,7 +191,7 @@ const char *bad_parse_msgs[] = {
     NULL,
 };
 
-const char *bad_comp_msgs[] = {
+const char *bad_sema_msgs[] = {
     NULL,
     NULL,
     NULL,
@@ -201,15 +199,15 @@ const char *bad_comp_msgs[] = {
 };
 
 TEST(semantic_analysis) {
-    size_t src_size = sizeof(bad_srcs) / sizeof(*bad_srcs);
+    size_t src_size = sizeof(sema_test_srcs) / sizeof(*sema_test_srcs);
     size_t pmsg_size = sizeof(bad_parse_msgs) / sizeof(*bad_parse_msgs);
-    size_t smsg_size = sizeof(bad_comp_msgs) / sizeof(*bad_comp_msgs);
+    size_t smsg_size = sizeof(bad_sema_msgs) / sizeof(*bad_sema_msgs);
     PRECONDITION(src_size == pmsg_size && "Forgot to add a parser error message (or NULL)");
     PRECONDITION(src_size == smsg_size && "Forgot to add a compilation error message (or NULL)");
-    for (size_t i = 0; i < sizeof(bad_srcs) / sizeof(*bad_srcs); i += 1) {
-        PRECONDITION(bad_srcs[i]);
+    for (size_t i = 0; i < src_size; i += 1) {
+        PRECONDITION(sema_test_srcs[i]);
         coyc_lexer_t lexer;
-        PRECONDITION(coyc_lexer_init(&lexer, "<semalysis_test>", bad_srcs[i], strlen(bad_srcs[i])));
+        PRECONDITION(coyc_lexer_init(&lexer, "<semalysis_test>", sema_test_srcs[i], strlen(sema_test_srcs[i])));
         ast_root_t root;
         coyc_pctx_t pctx;
         pctx.lexer = &lexer;
@@ -218,20 +216,26 @@ TEST(semantic_analysis) {
         ASSERT_EQ_STR(pctx.err_msg, bad_parse_msgs[i]);
         if (!pctx.err_msg) {
             // Parser is good, let's check semalysis
-            coyc_tree_free(&pctx);
-
-            switch (i) {
-                case 3:
-                    //ASSERT_EQ_INT)
-                    //break;
-                default: ASSERT_TODO("semalysis test%lu", i);
+            ASSERT_EQ_STR(coyc_semalysis(&root), bad_sema_msgs[i]);
+            if (!bad_sema_msgs[i]) {
+                // Semalysis modifies the tree *in place*, so we can just check it now
+                switch (i) {
+                    case 3:
+                        ASSERT_EQ_INT(arrlenu(root.decls), 1);
+                        ASSERT_EQ_INT(root.decls[0].base.type, function);
+                        ASSERT_EQ_STR(root.decls[0].base.name, "factorial");
+                        ASSERT_EQ_INT(root.decls[0].function.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
+                        ASSERT_EQ_INT(root.decls[0].function.return_type.u.integer.is_signed, false);
+                        ASSERT_EQ_INT(root.decls[0].function.return_type.u.integer.width, 32);
+                        ASSERT_EQ_INT(root.decls[0].function.type.category, COY_TYPEINFO_CAT_FUNCTION_);
+                        break;
+                    default: ASSERT_TODO("semalysis test%lu", i);
+                }
             }
-        //    coyc_sctx_t *sctx = coyc_semalysis(&root);
-//            ASSERT(sctx);
-  //          ASSERT_EQ_STR(sctx->err_msg, bad_comp_msgs[i]);
+            coyc_tree_free(&pctx);
         }
         else {
-            PRECONDITION(!bad_comp_msgs[i]);
+            PRECONDITION(!bad_sema_msgs[i]);
         }
         coyc_lexer_deinit(&lexer);
     }

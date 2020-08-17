@@ -6,22 +6,7 @@
 #include <stdint.h>
 
 #include "lexer.h"
-
-typedef enum primitive {
-    invalid, uint, _int, int_literal,
-} primitive_t;
-
-typedef enum {
-    no_type, primitive, 
-} type_type_t;
-
-typedef union type {
-    type_type_t type;
-    struct {
-        type_type_t type;
-        primitive_t primitive;
-    } primitive;
-} type_t;
+#include "typeinfo.h"
 
 typedef struct {
     enum {function, import} type;
@@ -40,9 +25,8 @@ typedef enum {
 
 typedef union {
     struct {
-        type_t type;
         // Bitcast this to the correct type
-        uint64_t value;
+        int64_t value;
     } integer;
 } literal_t;
 
@@ -67,7 +51,7 @@ typedef union {
 } expression_value_t;
 
 struct expression {
-    type_t type;
+    struct coy_typeinfo_ type;
     coyc_token_t op;
     expression_value_t lhs, rhs;
 };
@@ -81,13 +65,14 @@ typedef union {
 } statement_t;
 
 typedef struct {
-    type_t type;
+    struct coy_typeinfo_ type;
     char *name;
 } parameter_t;
 
 typedef struct function {
     decl_base_t base;
-    type_t return_type;
+    struct coy_typeinfo_ type;
+    struct coy_typeinfo_ return_type;
     statement_t *statements;
     parameter_t *parameters;
 } function_t;

@@ -21,32 +21,37 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_sctx_t *ctx, con
 
 #define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
 
-bool _type_eql(type_t a, type_t b) {
-    if (a.type == no_type || b.type == no_type) {
+bool coy_type_eql_(struct coy_typeinfo_ a, struct coy_typeinfo_ b) {
+    if (a.category != b.category) {
         return false;
     }
-    return a.primitive.primitive == b.primitive.primitive;
+    switch (a.category) {
+        case COY_TYPEINFO_CAT_INTERNAL_:
+            return false;
+        case COY_TYPEINFO_CAT_INTEGER_:
+            return a.u.integer.is_signed == b.u.integer.is_signed && a.u.integer.width == b.u.integer.width;
+        default:
+            return false;
+    }
 }
 
-bool _type_coerces(type_t to, type_t from) {
-    if (_type_eql(to, from)) return true;
-    if (to.type == primitive && from.type == primitive) {
-        if (to.primitive.primitive == int_literal) {
-            return true;
-        }
+bool _type_coerces(struct coy_typeinfo_ to, struct coy_typeinfo_ from) {
+    if (coy_type_eql_(to, from))
+        return true;
+    if (to.category != from.category)
+        return false;
+    switch (to.category) {
+        default:
+            return false;
     }
-    return false;
 }
 
-char *_type_str_(type_t a) {
-    if (a.primitive.primitive == int_literal) {
-        return coy_strdup_("int_literal", 11);
-    }
-    if (a.primitive.primitive == _int) {
-        return coy_strdup_("int", 3);
-    }
-    else if (a.primitive.primitive == uint) {
-        return coy_strdup_("uint", 4);
+char *coy_type_str_(struct coy_typeinfo_ a) {
+    switch (a.category) {
+        case COY_TYPEINFO_CAT_INTEGER_:
+            return coy_aprintf_("%sint%u", a.u.integer.is_signed ? " " : "u", a.u.integer.width);
+        default:
+            break;
     }
     return coy_strdup_("none", 4);
 }
@@ -63,7 +68,7 @@ static void resolve_type(coyc_sctx_t *ctx, function_t func, expression_t *expr) 
         resolve_type(ctx, func, expr->rhs.expression.expression);
     }
 
-    type_t l, r;
+    struct coy_typeinfo_ l, r;
     if (expr->lhs.type == parameter) {
         l = func.parameters[expr->lhs.parameter.index].type;
     }
@@ -84,7 +89,7 @@ static void resolve_type(coyc_sctx_t *ctx, function_t func, expression_t *expr) 
     }
 
     if (op_is_arithmetic(expr->op.kind)) {
-        if (_type_eql(l, r)) {
+        if (coy_type_eql_(l, r)) {
             expr->type = l;
         }
         else {
@@ -142,9 +147,9 @@ static void coyc_sema_func(coyc_sctx_t *ctx, function_t func) {
         case return_:{
             resolve_idents(ctx, func, statement.return_.value);
             resolve_type(ctx, func, statement.return_.value);
-            const type_t returned = statement.return_.value->type;
+            const struct coy_typeinfo_ returned = statement.return_.value->type;
             if (!_type_coerces(returned, func.return_type)) {
-                errorf(ctx, "Returning type %s, %s expected", _type_str_( returned), _type_str_(func.return_type));
+                errorf(ctx, "Returning type %s, %s expected", coy_type_str_( returned), coy_type_str_(func.return_type));
             }
             break;}
         default:
