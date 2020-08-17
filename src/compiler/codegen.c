@@ -10,7 +10,7 @@
 #include "util/debug.h"
 #include "util/hints.h"
 #include "util/string.h"
-
+#include "function_builder.h"
 
 static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_cctx_t *ctx, const char *fmt, ...) {
     va_list args;
@@ -23,7 +23,7 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_cctx_t *ctx, con
 }
 
 #define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
-
+/*
 static size_t coyc_gen_expr(coyc_cctx_t *ctx, coy_instruction_t **instrs, expression_t *expr);
 
 static size_t expr_value_reg(coyc_cctx_t *ctx, coy_instruction_t **instrs, expression_value_t value) {
@@ -72,23 +72,18 @@ static size_t coyc_gen_expr(coyc_cctx_t *ctx, coy_instruction_t **instrs, expres
     arrput(*instrs, larg);
     arrput(*instrs, rarg);
     return reg;
+    COY_TODO("REIMPL");
 }
-
-// TODO: this is a PRIVATE API!
-void coy_function_update_maxregs_(struct coy_compat_function_* func);
+*/
 static void coyc_gen_func(coyc_cctx_t *ctx, function_t func) {
 
     ctx->func = &func;
 
-    coy_function_t gen_func;
-    gen_func.blocks = NULL;
-    gen_func.u.coy.instrs = NULL;
-    coy_function_block_t block;
-    block.offset = 0;
-    block.nparams = arrlenu(func.parameters);
-    arrput(gen_func.blocks, block);
+    
+   // struct coy_function_builder_ builder;
+    //coy_function_builder_init_(&builder, );
 
-    for (size_t i = 0; i < arrlenu(func.statements); i += 1) {
+    /*for (size_t i = 0; i < arrlenu(func.statements); i += 1) {
         statement_t statement = func.statements[i];
         switch (statement.type) {
         case return_:{
@@ -103,9 +98,8 @@ static void coyc_gen_func(coyc_cctx_t *ctx, function_t func) {
         }
     }
 
-    coy_function_update_maxregs_(&gen_func);
-    arrput(ctx->module->functions, gen_func);
-
+*/
+COY_TODO("reimpl");
 }
 
 coyc_cctx_t coyc_codegen(ast_root_t *root) {
@@ -117,8 +111,7 @@ coyc_cctx_t coyc_codegen(ast_root_t *root) {
     module->functions = NULL;
     ctx.module = module;
     if (setjmp(ctx.err_env) == 255) {
-
-        //coy_module_free(module);
+        coyc_cg_free(ctx);
         ctx.module = NULL;
         return ctx;
     }
@@ -135,9 +128,7 @@ coyc_cctx_t coyc_codegen(ast_root_t *root) {
 
 void coyc_cg_free(coyc_cctx_t ctx) {
     for (int i = 0; i < arrlen(ctx.module->functions); i += 1) {
-        coy_function_t func = ctx.module->functions[i];
-        arrfree(func.blocks);
-        arrfree(func.u.coy.instrs);
+        COY_TODO("REIMPL");
     }
     arrfree(ctx.module->functions);
     free(ctx.module);

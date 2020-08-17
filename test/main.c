@@ -220,7 +220,7 @@ TEST(semantic_analysis) {
             if (!bad_sema_msgs[i]) {
                 // Semalysis modifies the tree *in place*, so we can just check it now
                 switch (i) {
-                    case 3:
+                    case 3:{
                         ASSERT_EQ_INT(arrlenu(root.decls), 1);
                         ASSERT_EQ_INT(root.decls[0].base.type, function);
                         ASSERT_EQ_STR(root.decls[0].base.name, "factorial");
@@ -228,7 +228,16 @@ TEST(semantic_analysis) {
                         ASSERT_EQ_INT(root.decls[0].function.return_type.u.integer.is_signed, false);
                         ASSERT_EQ_INT(root.decls[0].function.return_type.u.integer.width, 32);
                         ASSERT_EQ_INT(root.decls[0].function.type.category, COY_TYPEINFO_CAT_FUNCTION_);
-                        break;
+                        ASSERT(coy_type_eql_(*root.decls[0].function.type.u.function.rtype, root.decls[0].function.return_type));
+                        ASSERT_EQ_INT(arrlen(root.decls[0].function.parameters), 1);
+                        ASSERT(root.decls[0].function.type.u.function.ptypes);
+                        ASSERT(root.decls[0].function.type.u.function.ptypes[0]);
+                        size_t count = 0;
+                        for (struct coy_typeinfo_ **T = root.decls[0].function.type.u.function.ptypes; *T; T += 1, count = count + 1) {
+                            ASSERT_EQ_PTR(*T, root.decls[0].function.parameters + count);
+                        }
+                        ASSERT_EQ_INT(count, 1);
+                        break;}
                     default: ASSERT_TODO("semalysis test%lu", i);
                 }
             }
@@ -243,7 +252,7 @@ TEST(semantic_analysis) {
 
 TEST(vm_basic)
 {
-    static const struct coy_typeinfo_ ti_int = {
+    static struct coy_typeinfo_ ti_int = {
         COY_TYPEINFO_CAT_INTEGER_,
         {.integer={
             .is_signed=true,
@@ -251,12 +260,12 @@ TEST(vm_basic)
         }},
         NULL, NULL,
     };
-    static const struct coy_typeinfo_* const ti_params_int_int[] = {
+    static struct coy_typeinfo_* ti_params_int_int[] = {
         &ti_int,
         &ti_int,
         NULL,
     };
-    static const struct coy_typeinfo_ ti_function_int_int_int = {
+    static struct coy_typeinfo_ ti_function_int_int_int = {
         COY_TYPEINFO_CAT_FUNCTION_,
         {.function={
             .rtype = &ti_int,
@@ -301,7 +310,7 @@ TEST(vm_basic)
 
 TEST(function_builder_verify)
 {
-    static const struct coy_typeinfo_ ti_int = {
+    static struct coy_typeinfo_ ti_int = {
         COY_TYPEINFO_CAT_INTEGER_,
         {.integer={
             .is_signed=true,
@@ -309,11 +318,11 @@ TEST(function_builder_verify)
         }},
         NULL, NULL,
     };
-    static const struct coy_typeinfo_* const ti_params_int[] = {
+    static struct coy_typeinfo_* ti_params_int[] = {
         &ti_int,
         NULL,
     };
-    static const struct coy_typeinfo_ ti_function_int_int = {
+    static struct coy_typeinfo_ ti_function_int_int = {
         COY_TYPEINFO_CAT_FUNCTION_,
         {.function={
             .rtype = &ti_int,

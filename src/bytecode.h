@@ -5,11 +5,11 @@
 
 #include "vm/compat_shims.h"
 
-typedef struct coy_module_
+typedef struct coy_compat_module_
 {
     const struct coy_refval_vtbl_* vtbl;
     union coy_register_* variables;
-    coy_function_t *functions;
+    struct coy_function_ *functions;
 } coy_module_t;
 
 void coy_module_free(coy_module_t *module);

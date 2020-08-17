@@ -60,7 +60,7 @@ static bool op_is_arithmetic(coyc_token_kind_t op) {
     return op == COYC_TK_OPMUL || op == COYC_TK_OPADD || op == COYC_TK_OPSUB || op == COYC_TK_OPDIV;
 }
 
-static void resolve_type(coyc_sctx_t *ctx, function_t func, expression_t *expr) {
+static void resolve_type(coyc_sctx_t *ctx, function_t *func, expression_t *expr) {
     if (expr->lhs.type == expression) {
         resolve_type(ctx, func, expr->lhs.expression.expression);
     }
@@ -70,7 +70,7 @@ static void resolve_type(coyc_sctx_t *ctx, function_t func, expression_t *expr) 
 
     struct coy_typeinfo_ l, r;
     if (expr->lhs.type == parameter) {
-        l = func.parameters[expr->lhs.parameter.index].type;
+        l = func->parameters[expr->lhs.parameter.index].type;
     }
     else if (expr->lhs.type == expression) {
         l = expr->lhs.expression.expression->type;
@@ -79,7 +79,7 @@ static void resolve_type(coyc_sctx_t *ctx, function_t func, expression_t *expr) 
         ERROR("Resolve type [^parameter]");
     }
     if (expr->rhs.type == parameter) {
-        r = func.parameters[expr->rhs.parameter.index].type;
+        r = func->parameters[expr->rhs.parameter.index].type;
     }
     else if (expr->rhs.type == expression) {
         r = expr->rhs.expression.expression->type;
@@ -101,7 +101,7 @@ static void resolve_type(coyc_sctx_t *ctx, function_t func, expression_t *expr) 
     }
 }
 
-static void resolve_idents(coyc_sctx_t *ctx, function_t func, expression_t *expr) {
+static void resolve_idents(coyc_sctx_t *ctx, function_t *func, expression_t *expr) {
     if (expr->lhs.type == expression) {
         resolve_idents(ctx, func, expr->lhs.expression.expression);
     }
@@ -109,8 +109,8 @@ static void resolve_idents(coyc_sctx_t *ctx, function_t func, expression_t *expr
         resolve_idents(ctx, func, expr->rhs.expression.expression);
     }
     if (expr->lhs.type == identifier) {
-        for (size_t i = 0; i < arrlenu(func.parameters); i+= 1) {
-            parameter_t param = func.parameters[i];
+        for (size_t i = 0; i < arrlenu(func->parameters); i+= 1) {
+            parameter_t param = func->parameters[i];
             if (!strcmp(param.name, expr->lhs.identifier.name)) {
                 // name is owned by identifier, so free it.
                 free(expr->lhs.identifier.name);
@@ -124,8 +124,8 @@ static void resolve_idents(coyc_sctx_t *ctx, function_t func, expression_t *expr
         }
     }
     if (expr->rhs.type == identifier) {
-        for (size_t i = 0; i < arrlenu(func.parameters); i+= 1) {
-            parameter_t param = func.parameters[i];
+        for (size_t i = 0; i < arrlenu(func->parameters); i+= 1) {
+            parameter_t param = func->parameters[i];
             if (!strcmp(param.name, expr->rhs.identifier.name)) {
                 // name is owned by identifier, so free it.
                 free(expr->rhs.identifier.name);
@@ -140,16 +140,25 @@ static void resolve_idents(coyc_sctx_t *ctx, function_t func, expression_t *expr
     }
 }
 
-static void coyc_sema_func(coyc_sctx_t *ctx, function_t func) {
-    for (size_t i = 0; i < arrlenu(func.statements); i += 1) {
-        statement_t statement = func.statements[i];
+static void coyc_sema_func(coyc_sctx_t *ctx, function_t *func) {
+    func->type.category = COY_TYPEINFO_CAT_FUNCTION_;
+    func->type.u.function.rtype = &func->return_type;
+    const size_t params = arrlenu(func->parameters);
+    func->type.u.function.ptypes = malloc(sizeof(struct coy_typeinfo_*) * (params + 1));
+    fprintf(stderr, "Params: %lu\n", params);
+    func->type.u.function.ptypes[params] = NULL;
+    for (size_t i = 0; i < params; i += 1) {
+        func->type.u.function.ptypes[i] = &func->parameters[i].type;
+    }
+    for (size_t i = 0; i < arrlenu(func->statements); i += 1) {
+        statement_t statement = func->statements[i];
         switch (statement.type) {
         case return_:{
             resolve_idents(ctx, func, statement.return_.value);
             resolve_type(ctx, func, statement.return_.value);
             const struct coy_typeinfo_ returned = statement.return_.value->type;
-            if (!_type_coerces(returned, func.return_type)) {
-                errorf(ctx, "Returning type %s, %s expected", coy_type_str_( returned), coy_type_str_(func.return_type));
+            if (!_type_coerces(returned, func->return_type)) {
+                errorf(ctx, "Returning type %s, %s expected", coy_type_str_( returned), coy_type_str_(func->return_type));
             }
             break;}
         default:
@@ -167,9 +176,9 @@ char *coyc_semalysis(ast_root_t *root) {
         return msg;
     }
     for (size_t i = 0; i < arrlenu(root->decls); i+= 1) {
-        decl_t decl = root->decls[i];
-        if (decl.base.type == function) {
-            coyc_sema_func(ctx, decl.function);
+        decl_t *decl = root->decls + i;
+        if (decl->base.type == function) {
+            coyc_sema_func(ctx, &decl->function);
         } else {
             errorf(ctx, "TODO semantic analysis non-function entries");
         }

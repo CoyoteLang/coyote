@@ -27,7 +27,7 @@ struct coy_typeinfo_
         struct
         {
             const struct coy_typeinfo_* rtype;  //< return type
-            const struct coy_typeinfo_* const* ptypes;//< param types
+             struct coy_typeinfo_** ptypes;//< param types
         } function;
     } u;
     coy_gc_mark_function_* cb_mark;
