@@ -159,7 +159,7 @@ TEST(codegen)
     coy_env_init(&env);
 
     coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &cctx.module->functions[0], 4, false);
+//    coy_context_push_frame_(ctx, &cctx.module->functions[0], 4, false);
     coy_push_uint(ctx, 2);
     coy_push_uint(ctx, 3);
     coy_push_uint(ctx, 1);
