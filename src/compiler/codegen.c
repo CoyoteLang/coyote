@@ -23,13 +23,13 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_cctx_t *ctx, con
 }
 
 #define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
-/*
-static size_t coyc_gen_expr(coyc_cctx_t *ctx, coy_instruction_t **instrs, expression_t *expr);
 
-static size_t expr_value_reg(coyc_cctx_t *ctx, coy_instruction_t **instrs, expression_value_t value) {
+static uint32_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_t *expr);
+
+static size_t expr_value_reg(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_value_t value) {
     switch (value.type) {
     case expression:
-        return coyc_gen_expr(ctx, instrs, value.expression.expression);
+        return coyc_gen_expr(ctx, builder, value.expression.expression);
     case identifier:
         ERROR("Internal error: identifier remaining post-semalysis");
     case parameter:
@@ -56,50 +56,46 @@ static coy_instruction_opcode_t fromToken(coyc_token_kind_t op) {
 }
 
 /// Returns the SSA reg containing the final result 
-static size_t coyc_gen_expr(coyc_cctx_t *ctx, coy_instruction_t **instrs, expression_t *expr) {
-    size_t lhs = expr_value_reg(ctx, instrs, expr->lhs);
-    size_t rhs = expr_value_reg(ctx, instrs, expr->rhs);
+static uint32_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_t *expr) {
+    size_t lhs = expr_value_reg(ctx, builder, expr->lhs);
+    size_t rhs = expr_value_reg(ctx, builder, expr->rhs);
 
     // TODO: check types
-
-    coy_instruction_t insn = { .op = {fromToken(expr->op.kind), COY_OPFLG_TYPE_UINT32, 0, 2} };
-    if (insn.op.code == COY_OPCODE_NOP) {
+    const coy_instruction_opcode_t op = fromToken(expr->op.kind);
+    if (op == COY_OPCODE_NOP) {
         ERROR("TODO more ops")
     }
-    size_t reg = arrlen(*instrs) + arrlen(ctx->func->parameters);
-    arrput(*instrs, insn);
-    coy_instruction_t larg = {.arg = {lhs, 0}}, rarg = {.arg = {rhs, 0}};
-    arrput(*instrs, larg);
-    arrput(*instrs, rarg);
+    
+    uint32_t reg = coy_function_builder_op_(builder, op, COY_OPFLG_TYPE_UINT32, false);
+    coy_function_builder_arg_reg_(builder, lhs);
+    coy_function_builder_arg_reg_(builder, rhs);
+
+
     return reg;
-    COY_TODO("REIMPL");
 }
-*/
+
 static void coyc_gen_func(coyc_cctx_t *ctx, function_t func) {
 
     ctx->func = &func;
-
     
-   // struct coy_function_builder_ builder;
-    //coy_function_builder_init_(&builder, );
-
-    /*for (size_t i = 0; i < arrlenu(func.statements); i += 1) {
+    struct coy_function_builder_ builder;
+    coy_function_builder_init_(&builder, &func.type, 0);
+    uint32_t block = coy_function_builder_block_(&builder, arrlenu(func.parameters), NULL, 0);
+    coy_function_builder_useblock_(&builder, block);
+    for (size_t i = 0; i < arrlenu(func.statements); i += 1) {
         statement_t statement = func.statements[i];
         switch (statement.type) {
         case return_:{
-            const size_t reg = coyc_gen_expr(ctx, &gen_func.u.coy.instrs, statement.return_.value);
-            const coy_instruction_t ret = {.op = {COY_OPCODE_RET, COY_OPFLG_TYPE_UINT32, 0, 1}};
-            arrput(gen_func.u.coy.instrs, ret);
-            const coy_instruction_t arg = {.arg = {reg, 0}};
-            arrput(gen_func.u.coy.instrs, arg);
+            const size_t reg = coyc_gen_expr(ctx, &builder, statement.return_.value);
+            coy_function_builder_op_(&builder, COY_OPCODE_RET, COY_OPFLG_TYPE_UINT32, false);
+            coy_function_builder_arg_reg_(&builder, reg);
             break;}
         default:
             errorf(ctx, "TODO: semalysis stmt type %d", statement.type);
         }
     }
-
-*/
-COY_TODO("reimpl");
+    arraddn(ctx->module->functions, 1);
+    coy_function_builder_finish_(&builder, &arrlast(ctx->module->functions));
 }
 
 coyc_cctx_t coyc_codegen(ast_root_t *root) {
@@ -128,7 +124,7 @@ coyc_cctx_t coyc_codegen(ast_root_t *root) {
 
 void coyc_cg_free(coyc_cctx_t ctx) {
     for (int i = 0; i < arrlen(ctx.module->functions); i += 1) {
-        COY_TODO("REIMPL");
+       // TODO
     }
     arrfree(ctx.module->functions);
     free(ctx.module);

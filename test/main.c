@@ -151,6 +151,8 @@ TEST(codegen)
     ASSERT_EQ_STR(cctx.err_msg, NULL);
     ASSERT(cctx.module);
     ASSERT(cctx.module->functions);
+    ASSERT_EQ_INT(arrlenu(cctx.module->functions), 1);
+    ASSERT(coy_function_verify_(cctx.module->functions));
 
     coyc_tree_free(&pctx);
     coyc_lexer_deinit(&lexer);
@@ -159,7 +161,7 @@ TEST(codegen)
     coy_env_init(&env);
 
     coy_context_t* ctx = coy_context_create(&env);
-//    coy_context_push_frame_(ctx, &cctx.module->functions[0], 4, false);
+    coy_context_push_frame_(ctx, &cctx.module->functions[0], 4, false);
     coy_push_uint(ctx, 2);
     coy_push_uint(ctx, 3);
     coy_push_uint(ctx, 1);
@@ -403,7 +405,7 @@ int main()
     TEST_EXEC(parser);
     TEST_EXEC(semantic_analysis);
     TEST_EXEC(vm_basic);
-    TEST_SKIP(codegen, "TODO: Update codegen to use function builder");
+    TEST_EXEC(codegen);
     TEST_EXEC(function_builder_verify);
     return TEST_REPORT();
 }
