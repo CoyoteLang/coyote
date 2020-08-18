@@ -161,18 +161,20 @@ TEST(codegen)
     coy_env_init(&env);
 
     coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &cctx.module->functions[0], 4, false);
+    coy_context_push_frame_(ctx, &cctx.module->functions[0], false);
     coy_push_uint(ctx, 2);
     coy_push_uint(ctx, 3);
     coy_push_uint(ctx, 1);
     coy_push_uint(ctx, 24);
+    // will be replaced to use public API at some point, so just declare the function here
+    extern void coy_vm_exec_frame_(coy_context_t*);
     coy_vm_exec_frame_(ctx);
 
     ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
 
     coyc_cg_free(cctx);
 
-  //  coy_env_deinit(&env);   //< not yet implemented
+    coy_env_deinit(&env);
 }
 
 const char *sema_test_srcs[] = {
@@ -182,7 +184,8 @@ const char *sema_test_srcs[] = {
     "int a() {}",
     "module factorial;\n"
     "u32 factorial(uint num) {\n"
-    "\n"
+    "\tif (num < 2) return 1;\n"
+    "\treturn factorial(num - 1) + factorial(num - 2);\n"
     "}\n"
 };
 
@@ -299,18 +302,23 @@ TEST(vm_basic)
     coy_env_t env;
     coy_env_init(&env);
 
+    struct coy_module_* module = coy_module_create_(&env, "main", false);
+    coy_module_inject_function_(module, "add", &func);
+
     coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &func, 2, false);
-    coy_push_uint(ctx, 5);
-    coy_push_uint(ctx, 7);
-    coy_vm_exec_frame_(ctx);
 
-    printf("RESULT: %" PRIu32 "\n", coy_slots_getval_(&ctx->top->slots, 0).u32);
+    coy_ensure_slots(ctx, 2);
+    coy_set_uint(ctx, 0, 5);
+    coy_set_uint(ctx, 1, 7);
+    ASSERT(coy_call(ctx, "main", "add"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 5 + 7);
 
-    //coy_env_deinit(&env);   //< not yet implemented
+    printf("RESULT: %" PRIu32 "\n", coy_get_uint(ctx, 0));
+
+    coy_env_deinit(&env);
 }
 
-TEST(function_builder_verify)
+static void function_builder_prepare(struct coy_function_* func, bool precondition)
 {
     static struct coy_typeinfo_ ti_int = {
         COY_TYPEINFO_CAT_INTEGER_,
@@ -394,9 +402,38 @@ u32 factorial(u32 num)
             coy_function_builder_arg_reg_(&builder, 0);
     }
 
+    coy_function_builder_finish_(&builder, func);
+    if(precondition)
+        PRECONDITION(coy_function_verify_(func));
+    else
+        ASSERT(coy_function_verify_(func));
+}
+TEST(function_builder_verify)
+{
     struct coy_function_ func;
-    coy_function_builder_finish_(&builder, &func);
-    ASSERT(coy_function_verify_(&func));
+    function_builder_prepare(&func, false);
+}
+TEST(vm_factorial)
+{
+    struct coy_function_ func;
+    function_builder_prepare(&func, true);
+
+    coy_env_t env;
+    coy_env_init(&env);
+
+    struct coy_module_* module = coy_module_create_(&env, "main", false);
+    coy_module_inject_function_(module, "factorial", &func);
+
+    coy_context_t* ctx = coy_context_create(&env);
+
+    coy_ensure_slots(ctx, 1);
+    coy_set_uint(ctx, 0, 6);
+    ASSERT(coy_call(ctx, "main", "factorial"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 720);
+
+    printf("RESULT: %" PRIu32 "\n", coy_get_uint(ctx, 0));
+
+    coy_env_deinit(&env);
 }
 
 int main()
@@ -407,5 +444,6 @@ int main()
     TEST_EXEC(vm_basic);
     TEST_EXEC(codegen);
     TEST_EXEC(function_builder_verify);
+    TEST_EXEC(vm_factorial);
     return TEST_REPORT();
 }

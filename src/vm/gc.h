@@ -18,6 +18,8 @@ struct coy_gc_
 };
 
 struct coy_gc_* coy_gc_init_(struct coy_gc_* gc);
+void coy_gc_deinit_(struct coy_gc_* gc);
+
 void* coy_gc_malloc_(struct coy_gc_* gc, size_t size, const struct coy_typeinfo_* typeinfo);
 void coy_gc_mark_(struct coy_gc_* gc, void* ptr);
 

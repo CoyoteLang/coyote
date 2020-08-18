@@ -1,5 +1,5 @@
 #include "gc.h"
-#include "typeinfo.h"
+#include "../typeinfo.h"
 #include "../util/debug.h"
 
 #include "stb_ds.h"
@@ -21,6 +21,31 @@ struct coy_gc_* coy_gc_init_(struct coy_gc_* gc)
         gc->sets[i] = NULL;
     gc->curset = 0;
     return gc;
+}
+void coy_gc_deinit_(struct coy_gc_* gc)
+{
+    if(!gc) return;
+    // run all destructors
+    for(size_t s = 0; s < sizeof(gc->sets) / sizeof(*gc->sets); s++)
+    {
+        for(size_t i = 0; i < stbds_arrlenu(gc->sets[s]); i++)
+        {
+            struct coy_gcobj_* obj = gc->sets[s][i];
+            if(obj->typeinfo->cb_dtor)
+                obj->typeinfo->cb_dtor(gc, obj + 1);
+        }
+    }
+    // now free memory
+    for(size_t s = 0; s < sizeof(gc->sets) / sizeof(*gc->sets); s++)
+    {
+        for(size_t i = 0; i < stbds_arrlenu(gc->sets[s]); i++)
+        {
+            struct coy_gcobj_* obj = gc->sets[s][i];
+            if(obj->typeinfo->cb_free)
+                obj->typeinfo->cb_free(gc, obj + 1);
+        }
+        stbds_arrfree(gc->sets[s]);
+    }
 }
 
 void* coy_gc_malloc_(struct coy_gc_* gc, size_t size, const struct coy_typeinfo_* typeinfo)

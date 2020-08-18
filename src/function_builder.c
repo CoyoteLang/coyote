@@ -184,7 +184,12 @@ void coy_function_builder_arg_const_(struct coy_function_builder_* builder, unio
     }
     struct coy_function_builder_block_* bblock = coy_function_builder_curbblock_(builder);
     struct coy_function_builder_const_reg_entry_** arr = type == COY_FUNCTION_BUILDER_CONST_TYPE_REF_ ? &builder->consts.refs : &builder->consts.vals;
+#if 0   // stb_ds bug
     struct coy_function_builder_const_reg_entry_* entry = stbds_hmgetp_null(*arr, reg);
+#else
+    ptrdiff_t entryidx = stbds_hmgeti(*arr, reg);
+    struct coy_function_builder_const_reg_entry_* entry = entryidx >= 0 ? &(*arr)[entryidx] : NULL;
+#endif
     struct coy_function_builder_instr_ref_ constref = {
         .block = builder->curblock,
         .instr = stbds_arrlenu(bblock->instrs),
@@ -205,7 +210,12 @@ void coy_function_builder_arg_const_(struct coy_function_builder_* builder, unio
 void coy_function_builder_arg_const_sym_(struct coy_function_builder_* builder, const char* sym)
 {
     struct coy_function_builder_block_* bblock = coy_function_builder_curbblock_(builder);
+#if 0   // stb_ds bug
     struct coy_function_builder_const_sym_entry_* entry = stbds_shgetp_null(builder->consts.syms, sym);
+#else
+    ptrdiff_t entryidx = stbds_shgeti(builder->consts.syms, sym);
+    struct coy_function_builder_const_sym_entry_* entry = entryidx >= 0 ? &builder->consts.syms[entryidx] : NULL;
+#endif
     struct coy_function_builder_instr_ref_ constref = {
         .block = builder->curblock,
         .instr = stbds_arrlenu(bblock->instrs),

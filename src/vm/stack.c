@@ -1,6 +1,6 @@
 #include "stack.h"
 #include "gc.h"
-#include "typeinfo.h"
+#include "../typeinfo.h"
 #include "context.h"
 #include "register.h"
 

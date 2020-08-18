@@ -1,4 +1,5 @@
-#include "compat_shims.h"
+#include "function.h"
+#include "context.h"
 #include "../bytecode.h"
 #include "stb_ds.h"
 
@@ -20,11 +21,22 @@
 {
 };*/
 
+static union coy_register_ coy_op_getreg_(struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, union coy_instruction_ regarg, bool* isptr)
+{
+    if(regarg.arg.isconst)
+    {
+        if(isptr) *isptr = regarg.arg.index < frame->function->u.coy.consts.nsymbols + frame->function->u.coy.consts.nrefs;
+        return frame->function->u.coy.consts.data[regarg.arg.index];
+    }
+    else
+        return coy_slots_get_(&seg->slots, frame->fp + regarg.arg.index, isptr);
+}
+
 static void coy_op_handle_add_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs == 2);
-    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
-    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
+    union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
@@ -40,8 +52,8 @@ static void coy_op_handle_add_(coy_context_t* ctx, struct coy_stack_segment_* se
 static void coy_op_handle_sub_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs == 2);
-    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
-    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
+    union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
@@ -57,8 +69,8 @@ static void coy_op_handle_sub_(coy_context_t* ctx, struct coy_stack_segment_* se
 static void coy_op_handle_mul_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs == 2);
-    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
-    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
+    union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     union coy_register_ dst;
     bool negresult;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
@@ -85,8 +97,8 @@ static void coy_op_handle_mul_(coy_context_t* ctx, struct coy_stack_segment_* se
 static void coy_op_handle_div_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs == 2);
-    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
-    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
+    union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
@@ -105,8 +117,8 @@ static void coy_op_handle_div_(coy_context_t* ctx, struct coy_stack_segment_* se
 static void coy_op_handle_rem_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs == 2);
-    union coy_register_ a = coy_slots_getval_(&seg->slots, frame->fp + instr[1].arg.index);
-    union coy_register_ b = coy_slots_getval_(&seg->slots, frame->fp + instr[2].arg.index);
+    union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
+    union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     union coy_register_ dst;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
@@ -124,16 +136,23 @@ static void coy_op_handle_rem_(coy_context_t* ctx, struct coy_stack_segment_* se
 }
 static void coy_op_handle_jmp_helper_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t block_arg, uint32_t mov_head, uint32_t mov_tail)
 {
-    COY_CHECK_MSG(!((mov_tail - mov_head) & 1), "need an even number of moves");
+    COY_ASSERT(mov_head <= mov_tail);
     uint32_t block = instr[1+block_arg].raw;
-    for(size_t i = mov_head; i < mov_tail; i += 2)
+    uint32_t mov_num = mov_tail - mov_head;
+    // move temp <= stack
+    for(size_t i = 0; i < mov_num; i++)
     {
-        uint32_t dst = frame->fp + instr[1+i+0].arg.index;
-        uint32_t src = frame->fp + instr[1+i+1].arg.index;
         // this can *definitely* be optimized
         bool isptr;
-        union coy_register_ r = coy_slots_get_(&seg->slots, src, &isptr);
-        coy_slots_set_(&seg->slots, dst, r, isptr);
+        union coy_register_ r = coy_op_getreg_(seg, frame, instr[1+mov_head+i], &isptr);
+        coy_slots_set_(&ctx->slots, i, r, isptr);
+    }
+    // move stack <= temp
+    for(size_t i = 0; i < mov_num; i++)
+    {
+        bool isptr;
+        union coy_register_ r = coy_slots_get_(&ctx->slots, i, &isptr);
+        coy_slots_set_(&seg->slots, i, r, isptr);
     }
     COY_CHECK(block < stbds_arrlenu(frame->function->u.coy.blocks));
     frame->block = block;
@@ -148,19 +167,16 @@ static void coy_op_handle_jmp_(coy_context_t* ctx, struct coy_stack_segment_* se
 static void coy_op_handle_jmpc_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     COY_CHECK(instr->op.nargs >= 5);
-    bool isptra, isptrb;
-    union coy_register_ a = coy_slots_get_(&seg->slots, frame->fp + instr[1].arg.index, &isptra);
-    union coy_register_ b = coy_slots_get_(&seg->slots, frame->fp + instr[2].arg.index, &isptrb);
+    union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
+    union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     bool testeq, testlt;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
-        COY_CHECK(!isptra && !isptrb);
         testeq = a.i32 == b.i32;
         testlt = a.i32 < b.i32;
         break;
     case COY_OPFLG_TYPE_UINT32:
-        COY_CHECK(!isptra && !isptrb);
         testeq = a.u32 == b.u32;
         testlt = a.u32 < b.u32;
         break;
@@ -190,13 +206,9 @@ static void coy_op_handle_ret_(coy_context_t* ctx, struct coy_stack_segment_* se
     COY_CHECK(instr->op.nargs <= 1);
     if(instr->op.nargs)
     {
-        size_t ra = frame->fp + instr[1].arg.index;
-        if(ra != frame->fp) // it's a no-op if this is true
-        {
-            bool isptr;
-            union coy_register_ a = coy_slots_get_(&seg->slots, ra, &isptr);
-            coy_slots_set_(&seg->slots, frame->fp + 0, a, isptr);
-        }
+        bool isreg;
+        union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], &isreg);
+        coy_slots_set_(&seg->slots, frame->fp + 0, a, isreg);
     }
     coy_context_pop_frame_(ctx);
 }
@@ -279,7 +291,7 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
                 printf("\t$%" PRIu32 " = %s", dstreg - frame->fp, name);
                 for(size_t i = 1; i <= instr->op.nargs; i++)
                 {
-                    printf(" $%" PRIu32, instr[i].arg.index);
+                    printf(" %s$%" PRIu32, instr[i].arg.isconst ? "c" : "", instr[i].arg.index);
                 }
                 printf("\n");
             }
@@ -301,14 +313,11 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
         }
         while(stbds_arrlenu(seg->frames) == nframes);
     }
-}
-
-void coy_push_uint(coy_context_t* ctx, uint32_t u)
-{
-    struct coy_stack_segment_* seg = ctx->top;
-    coy_slots_setlen_(&seg->slots, coy_slots_getlen_(&seg->slots) + 1);
-    union coy_register_ val = {.u32 = u};
-    coy_slots_setval_(&seg->slots, coy_slots_getlen_(&seg->slots) - 1, val);
+    // TODO: determine number of return values
+    coy_slots_setlen_(&ctx->slots, 1);
+    bool isptr;
+    union coy_register_ ret = coy_slots_get_(&ctx->top->slots, 0, &isptr);
+    coy_slots_set_(&ctx->slots, 0, ret, isptr);
 }
 
 /*

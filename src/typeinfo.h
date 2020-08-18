@@ -1,10 +1,12 @@
 #ifndef COY_TYPEINFO_H_
 #define COY_TYPEINFO_H_
 
+#include <stdint.h>
 #include <stdbool.h>
 
 struct coy_gc_;
 typedef void coy_gc_mark_function_(struct coy_gc_* gc, void* ptr);
+typedef void coy_gc_free_function_(struct coy_gc_* gc, void* ptr);
 typedef void coy_gc_dtor_function_(struct coy_gc_* gc, void* ptr);
 enum coy_typeinfo_category_
 {
@@ -31,6 +33,7 @@ struct coy_typeinfo_
         } function;
     } u;
     coy_gc_mark_function_* cb_mark;
+    coy_gc_free_function_* cb_free;
     coy_gc_dtor_function_* cb_dtor;
 };
 

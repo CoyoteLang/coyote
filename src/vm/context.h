@@ -24,8 +24,18 @@ typedef struct coy_context
 } coy_context_t;
 
 coy_context_t* coy_context_create(struct coy_env* env);
+void coy_context_destroy(coy_context_t* ctx);
 
-void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function, uint32_t nparams, bool segmented);
+void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function, bool segmented);
 void coy_context_pop_frame_(coy_context_t* ctx);
+
+uint32_t coy_num_slots(coy_context_t* ctx);
+void coy_ensure_slots(coy_context_t* ctx, uint32_t nslots);
+int32_t coy_normalize_index(coy_context_t* ctx, int32_t index);
+
+uint32_t coy_get_uint(coy_context_t* ctx, int32_t index);
+void coy_set_uint(coy_context_t* ctx, int32_t index, uint32_t value);
+
+bool coy_call(coy_context_t* ctx, const char* module_name, const char* function_name);
 
 #endif /* COY_VM_CONTEXT_H_ */
