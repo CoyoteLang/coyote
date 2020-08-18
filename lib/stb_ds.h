@@ -349,9 +349,9 @@ NOTES - HASH MAP
     attempt to serialize the internal hash table, as the hash is not consistent
     between different platforms, and may change with future versions of the library.
 
-  * Use sh_new_arena() for string hashmaps that you never delete from. Initialize
-    with NULL if you're managing the memory for your strings, or your strings are
-    never freed (at least until the hashmap is freed). Otherwise, use sh_new_strdup().
+  * If you manage memory yourself, or the strings must outlive the map, initialize to NULL.
+    Otherwise, if you never delete from the map, use sh_new_arena(). In any other situation,
+    use sh_new_strdup().
     @TODO: make an arena variant that garbage collects the strings with a trivial
     copy collector into a new arena whenever the table shrinks / rebuilds. Since
     current arena recommendation is to only use arena if it never deletes, then
