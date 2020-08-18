@@ -222,8 +222,8 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
             return lexer->token;
         default:
             fprintf(stderr, "\nlexer error near '%c' (\\x%.2X)\n", c, c);
-            abort();
-            break;
+            lexer->token.kind = COYC_TK_ERROR;
+            return lexer->token;
         }
     }
     assert(0);

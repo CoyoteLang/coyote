@@ -366,21 +366,23 @@ void coyc_parse(coyc_pctx_t *ctx)
     ctx->tokens = NULL;
     ctx->token_index = 0;
 
+    if (setjmp(ctx->err_env) == 255)
+    {
+        // Error
+        return;
+    }
+
     for(;;){
         coyc_token_t token = coyc_lexer_next(lexer, COYC_LEXER_CATEGORY_PARSER);
         if(token.kind == COYC_TK_EOF)
             break;
+        if (token.kind == COYC_TK_ERROR)
+            ERROR("Lexer error");
         arrput(ctx->tokens, token);
     }
 
     if (arrlen(ctx->tokens) == 0) {
         coyc_tree_free(ctx);
-        return;
-    }
-
-    if (setjmp(ctx->err_env) == 255)
-    {
-        // Error
         return;
     }
 
