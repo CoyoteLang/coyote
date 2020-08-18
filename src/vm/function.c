@@ -263,6 +263,16 @@ static bool coy_function_verify_jmpc_(struct coy_function_* func, const struct c
     if(!coy_function_verify_jmp_block_(func, block, instr, i, isptr, jmpisptr, jmpb_f, jmpargsep, instr->op.nargs)) return false;
     return true;
 }
+static bool coy_function_verify_call_(struct coy_function_* func, const struct coy_function_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
+{
+    COY_TODO("verify call");
+    return true;
+}
+static bool coy_function_verify_retcall_(struct coy_function_* func, const struct coy_function_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
+{
+    COY_TODO("verify retcall");
+    return true;
+}
 static bool coy_function_verify_ret_(struct coy_function_* func, const struct coy_function_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
 {
     // TODO: use typeinfo to verify that arg is correct (0 args for void, 1 val for val func, 1 ref for ref func)
@@ -296,6 +306,8 @@ static const struct coy_function_verify_opinfo_ coy_opinfos_[256] = {
     // control flow
     [COY_OPCODE_JMP] = {0,{1,-1},coy_function_verify_jmp_,.islast=true},
     [COY_OPCODE_JMPC] = {0,{5,-1},coy_function_verify_jmpc_,.islast=true},
+    [COY_OPCODE_CALL] = {-1,{1,-1},coy_function_verify_call_},
+    [COY_OPCODE_RETCALL] = {0,{1,-1},coy_function_verify_retcall_,.islast=true},
     [COY_OPCODE_RET] = {0,{0,1},coy_function_verify_ret_,.islast=true},
     // debugging
     [COY_OPCODE__DUMPU32] = {0,{1,-1},coy_function_verify_numeric_args_},

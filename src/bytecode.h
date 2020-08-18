@@ -23,6 +23,8 @@ void coy_module_free(coy_module_t *module);
     ITEM(REM),              \
     ITEM(JMP),              \
     ITEM(JMPC),             \
+    ITEM(CALL),             \
+    ITEM(RETCALL),          \
     ITEM(RET),              \
     ITEM(_DUMPU32)VAL(0xF0) \
     VLAST(0xFF)

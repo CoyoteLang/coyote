@@ -436,6 +436,144 @@ TEST(vm_factorial)
     coy_env_deinit(&env);
 }
 
+TEST(vm_factorial_call)
+{
+    ASSERT_TODO("implement coy_function_verify_{call,retcall}_, and the calls themselves in vm.c");
+    static struct coy_typeinfo_ ti_int = {
+        COY_TYPEINFO_CAT_INTEGER_,
+        {.integer={
+            .is_signed=true,
+            .width=32,
+        }},
+        NULL, NULL,
+    };
+    static struct coy_typeinfo_* ti_params_int_int[] = {
+        &ti_int,
+        &ti_int,
+        NULL,
+    };
+    static struct coy_typeinfo_ ti_function_int_int_int = {
+        COY_TYPEINFO_CAT_FUNCTION_,
+        {.function={
+            .rtype = &ti_int,
+            .ptypes = ti_params_int_int,
+        }},
+        NULL, NULL,
+    };
+    static struct coy_typeinfo_ ti_function_int_int = {
+        COY_TYPEINFO_CAT_FUNCTION_,
+        {.function={
+            .rtype = &ti_int,
+            .ptypes = ti_params_int_int + 1, //< the offset skips the first `int`
+        }},
+        NULL, NULL,
+    };
+
+
+    coy_env_t env;
+    coy_env_init(&env);
+
+    struct coy_module_* module = coy_module_create_(&env, "main", false);
+
+    struct coy_function_builder_ builder;
+    /* ========== factorial ========== */
+/*
+u32 factorial(u32 num)
+.0_entry(num):
+    $1 = call factpart($0, 1)
+    ret $1
+*/
+    PRECONDITION(coy_function_builder_init_(&builder, &ti_function_int_int, 0));
+    struct coy_function_ func_factorial;
+    {
+        uint32_t b0_entry = coy_function_builder_block_(&builder, 1, NULL, 0);
+
+        coy_function_builder_useblock_(&builder, b0_entry);
+        {
+            // this one could be a tail call, but we want to test normal calls, too
+            uint32_t callret = coy_function_builder_op_(&builder, COY_OPCODE_CALL, 0, false);
+                coy_function_builder_arg_const_sym_(&builder, "main;factpart");
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=1});
+            coy_function_builder_op_(&builder, COY_OPCODE_RET, 0, false);
+                coy_function_builder_arg_reg_(&builder, callret);
+        }
+
+        coy_function_builder_finish_(&builder, &func_factorial);
+        PRECONDITION(coy_function_verify_(&func_factorial));
+        coy_module_inject_function_(module, "factorial", &func_factorial);
+    }
+
+    /* ========== factpart ========== */
+/*
+u32 factpart(u32 num, u32 acc)
+.0_entry(num,acc):
+    jmpc lt 0, $1,
+        .1_call($0,$1),
+        .2_end($1)
+.1_call(num,acc):
+    $2 = sub $0, 1
+    $5 = mul $0, $1
+    retcall factpart($2, $5)
+.2_end(acc):
+    ret $0
+*/
+    PRECONDITION(coy_function_builder_init_(&builder, &ti_function_int_int_int, 0));
+    struct coy_function_ func_factpart;
+    {
+        uint32_t b0_entry = coy_function_builder_block_(&builder, 2, NULL, 0);
+        uint32_t b1_call = coy_function_builder_block_(&builder, 2, NULL, 0);
+        uint32_t b2_end = coy_function_builder_block_(&builder, 1, NULL, 0);
+
+        coy_function_builder_useblock_(&builder, b0_entry);
+        {
+            coy_function_builder_op_(&builder, COY_OPCODE_JMPC, COY_OPFLG_CMP_LT|COY_OPFLG_TYPE_UINT32, false);
+                coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=0});
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_imm_(&builder, b1_call);
+                coy_function_builder_arg_imm_(&builder, b2_end);
+                coy_function_builder_arg_imm_(&builder, 2);
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_reg_(&builder, 1);
+                coy_function_builder_arg_reg_(&builder, 1);
+        }
+        coy_function_builder_useblock_(&builder, b1_call);
+        {
+            uint32_t sub = coy_function_builder_op_(&builder, COY_OPCODE_SUB, COY_OPFLG_TYPE_UINT32, false);
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=1});
+            uint32_t mul = coy_function_builder_op_(&builder, COY_OPCODE_MUL, COY_OPFLG_TYPE_UINT32, false);
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_reg_(&builder, 1);
+            coy_function_builder_op_(&builder, COY_OPCODE_RETCALL, 0, false);
+                coy_function_builder_arg_const_sym_(&builder, "main;factpart");
+                coy_function_builder_arg_reg_(&builder, sub);
+                coy_function_builder_arg_reg_(&builder, mul);
+        }
+        coy_function_builder_useblock_(&builder, b2_end);
+        {
+            coy_function_builder_op_(&builder, COY_OPCODE_RET, 0, false);
+                coy_function_builder_arg_reg_(&builder, 0);
+        }
+
+        coy_function_builder_finish_(&builder, &func_factpart);
+        PRECONDITION(coy_function_verify_(&func_factpart));
+        coy_module_inject_function_(module, "factpart", &func_factpart);
+    }
+
+    /* ========== execute ========== */
+    coy_context_t* ctx = coy_context_create(&env);
+
+    coy_ensure_slots(ctx, 1);
+    coy_set_uint(ctx, 0, 6);
+    ASSERT(coy_call(ctx, "main", "factorial"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 720);
+
+    printf("RESULT: %" PRIu32 "\n", coy_get_uint(ctx, 0));
+
+    coy_env_deinit(&env);
+}
+
 int main()
 {
     TEST_EXEC(lexer);
@@ -445,5 +583,6 @@ int main()
     TEST_EXEC(codegen);
     TEST_EXEC(function_builder_verify);
     TEST_EXEC(vm_factorial);
+    TEST_EXEC(vm_factorial_call);
     return TEST_REPORT();
 }
