@@ -48,6 +48,26 @@ static int num_digits(uint32_t n)
     return nd;
 }
 
+// This test is for catching stb_ds bugs (currently, to ensure our fix for #775 doesn't regress).
+TEST(stb_ds)
+{
+    struct test_entry_
+    {
+        char* key;
+        const char* value;
+    };
+    struct test_entry_* sh = NULL;
+
+    stbds_shput(sh, "main", "this is `main`");  //< sh["main"] = "this is `main`"
+
+    struct test_entry_* entry = stbds_shgetp_null(sh, "main");   //< entry = sh["main"];
+
+    ASSERT(entry);
+    // and indeed, the test itself is a fail
+    ASSERT_EQ_STR(entry->key, "main");
+    ASSERT_EQ_STR(entry->value, "this is `main`");
+}
+
 TEST(lexer)
 {
     coyc_lexer_t lexer;
@@ -576,6 +596,7 @@ u32 factpart(u32 num, u32 acc)
 
 int main()
 {
+    TEST_EXEC(stb_ds);
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
     TEST_EXEC(semantic_analysis);
