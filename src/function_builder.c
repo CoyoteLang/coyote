@@ -76,13 +76,13 @@ void coy_function_builder_finish_(struct coy_function_builder_* builder, struct 
     }
     for(size_t r = nsyms; r < nsyms + nrefs; r++)
     {
-        struct coy_function_builder_const_reg_entry_* entry = &builder->consts.refs[r];
+        struct coy_function_builder_const_reg_entry_* entry = &builder->consts.refs[r-nsyms];
         fconsts->data[r] = entry->key;
         coy_function_builder_patch_constrefs_(builder, entry->value, r);
     }
     for(size_t v = nsyms + nrefs; v < nsyms + nrefs + nvals; v++)
     {
-        struct coy_function_builder_const_reg_entry_* entry = &builder->consts.vals[v];
+        struct coy_function_builder_const_reg_entry_* entry = &builder->consts.vals[v-(nsyms+nrefs)];
         fconsts->data[v] = entry->key;
         coy_function_builder_patch_constrefs_(builder, entry->value, v);
     }
