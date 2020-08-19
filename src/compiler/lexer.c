@@ -124,6 +124,8 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
         {
         case COYC_LEXER_EOF_: return coyc_lexer_mktoken_(lexer, COYC_TK_EOF, 0);
         case '+': return coyc_lexer_mktoken_(lexer, COYC_TK_OPADD, 1);
+        case '<': return coyc_lexer_mktoken_(lexer, COYC_TK_CMPLT, 1);
+        case '>': return coyc_lexer_mktoken_(lexer, COYC_TK_CMPGT, 1);
         case '-': return coyc_lexer_mktoken_(lexer, COYC_TK_OPSUB, 1);
         case '*': return coyc_lexer_mktoken_(lexer, COYC_TK_OPMUL, 1);
         case '/':
@@ -219,6 +221,8 @@ coyc_token_t coyc_lexer_next(coyc_lexer_t* lexer, uint32_t categories)
                 lexer->token.kind = COYC_TK_NATIVE;
             else if(COYC_LEXER_ISKEYWORD_(lexer, "return"))
                 lexer->token.kind = COYC_TK_RETURN;
+            else if (COYC_LEXER_ISKEYWORD_(lexer, "if"))
+                lexer->token.kind = COYC_TK_IF;
             return lexer->token;
         default:
             fprintf(stderr, "\nlexer error near '%c' (\\x%.2X)\n", c, c);

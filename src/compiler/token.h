@@ -22,6 +22,9 @@ typedef struct coy_source_range
     ITEM(OPDIV),            \
     ITEM(OPMUL),            \
     \
+    ITEM(CMPGT),            \
+    ITEM(CMPLT),            \
+    \
     ITEM(DOT),              \
     ITEM(COMMA),            \
     ITEM(SCOLON),           \
@@ -37,6 +40,7 @@ typedef struct coy_source_range
     \
     ITEM(INTEGER),          \
     ITEM(IDENT),            \
+    ITEM(IF),               \
     ITEM(RETURN),           \
     \
     ITEMI(WSPACE),          \
