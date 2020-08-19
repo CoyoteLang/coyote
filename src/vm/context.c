@@ -84,7 +84,7 @@ int32_t coy_normalize_index(coy_context_t* ctx, int32_t index)
     // TODO: Should we have this feature?
     //if(index < 0)   //< if index<0, count from the end
     //    index = coy_slots_getlen_(&ctx->slots) + index;
-    if(!COY_ENSURE(0 <= index && index < coy_slots_getlen_(&ctx->slots), "slot index out of bounds"))
+    if(!COY_ENSURE(0 <= index && (size_t)index < coy_slots_getlen_(&ctx->slots), "slot index out of bounds"))
         return 0;
     return index;
 }
