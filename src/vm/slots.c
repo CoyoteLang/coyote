@@ -82,3 +82,10 @@ void coy_slots_setptr_(struct coy_slots_* slots, size_t i, void* ptr)
     reg.ptr = ptr;
     coy_slots_set_(slots, i, reg, true);
 }
+
+void coy_slots_copy_(struct coy_slots_* dst, size_t d, struct coy_slots_* src, size_t s)
+{
+    bool isptr;
+    union coy_register_ reg = coy_slots_get_(src, s, &isptr);
+    coy_slots_set_(dst, d, reg, isptr);
+}

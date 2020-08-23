@@ -25,4 +25,6 @@ void coy_slots_set_(struct coy_slots_* slots, size_t i, union coy_register_ reg,
 void coy_slots_setval_(struct coy_slots_* slots, size_t i, union coy_register_ val);
 void coy_slots_setptr_(struct coy_slots_* slots, size_t i, void* ptr);
 
+void coy_slots_copy_(struct coy_slots_* dst, size_t d, struct coy_slots_* src, size_t s);
+
 #endif /* COY_VM_SLOTS_H_ */

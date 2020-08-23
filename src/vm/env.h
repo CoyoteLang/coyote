@@ -39,6 +39,7 @@ struct coy_module_symbol_entry_
 
 struct coy_module_
 {
+    struct coy_env* env;
     char* name;
     // TODO: this should probably be shared with the compiler's symbol table?
     struct coy_module_symbol_entry_* symbols;
@@ -52,6 +53,8 @@ struct coy_module_entry_
 struct coy_module_* coy_module_create_(struct coy_env* env, const char* name, bool allow_reserved);
 
 void coy_module_inject_function_(struct coy_module_* module, const char* name, struct coy_function_* function);
+bool coy_module_link_(struct coy_module_* module);
+struct coy_module_symbol_* coy_module_find_symbol_(struct coy_module_* module, const char* name);
 
 // A VM is a shared context that stores immutable data such as code.
 typedef struct coy_env
@@ -68,5 +71,7 @@ typedef struct coy_env
 
 coy_env_t* coy_env_init(coy_env_t* env);
 void coy_env_deinit(coy_env_t* env);
+
+struct coy_module_* coy_env_find_module_(coy_env_t* env, const char* name);
 
 #endif /* COY_VM_ENV_H_ */

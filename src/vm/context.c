@@ -32,20 +32,29 @@ void coy_context_destroy(coy_context_t* ctx)
         ctx->env->contexts.ptr[index]->index = index;
 }
 
-void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function, bool segmented)
+void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function, bool segmented, bool return_native)
 {
     if(!ctx->top || segmented)
         ctx->top = coy_stack_segment_create_(ctx);
     struct coy_stack_segment_* seg = ctx->top;
 
     struct coy_stack_frame_ frame;
-    frame.fp = coy_slots_getlen_(&seg->slots);
+    uint32_t nframes = stbds_arrlenu(seg->frames);
+    if(nframes && !segmented)
+    {
+        const struct coy_stack_frame_* pframe = &seg->frames[nframes-1u];
+        frame.fp = pframe->bp + (pframe->pc - pframe->function->u.coy.blocks[pframe->block].offset);
+    }
+    else
+        frame.fp = 0;
+
     frame.bp = frame.fp + function->u.coy.blocks[0].nparams;
     frame.block = 0;
+    frame.return_native = return_native;
     frame.pc = 0;
     frame.function = function;
     stbds_arrput(seg->frames, frame);
-    coy_slots_setlen_(&ctx->slots, function->u.coy.maxslots);
+    coy_slots_setlen_(&seg->slots, frame.fp + function->u.coy.maxslots);
 }
 void coy_context_pop_frame_(coy_context_t* ctx)
 {
@@ -60,14 +69,10 @@ void coy_context_pop_frame_(coy_context_t* ctx)
     nframes = stbds_arrlenu(ctx->top->frames);
     if(nframes)
     {
-        struct coy_function_* function = ctx->top->frames[nframes-1].function;
-        if(function->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
-        {
-            COY_TODO("coy_context_pop_frame_ for native functions");
-            coy_slots_setlen_(&ctx->slots, 1);  // TODO: adjust slots depending on whether function returned a value, then copy register into slot
-        }
-        else
-            coy_slots_setlen_(&ctx->slots, function->u.coy.maxslots);
+        struct coy_stack_frame_* frame = &ctx->top->frames[nframes-1];
+        struct coy_function_* function = frame->function;
+        if(!(function->attrib & COY_FUNCTION_ATTRIB_NATIVE_))
+            coy_slots_setlen_(&seg->slots, frame->fp + function->u.coy.maxslots);
     }
 }
 
@@ -125,11 +130,6 @@ bool coy_call(coy_context_t* ctx, const char* module_name, const char* function_
         COY_TODO("overloaded function resolution");
     else
         func = sentry->value.u.functions[0];
-    coy_context_push_frame_(ctx, func, false);
-    // TODO: Check types.
-    if(!COY_ENSURE(func->u.coy.blocks[0].nparams <= coy_slots_getlen_(&ctx->slots), "misuse: invalid number of parameters passed to the function"))
-        return false;
-    memcpy(ctx->top->slots.regs, ctx->slots.regs, func->u.coy.blocks[0].nparams * sizeof(union coy_register_));
-    coy_vm_exec_frame_(ctx);
+    coy_vm_call_(ctx, func, false);
     return true;
 }

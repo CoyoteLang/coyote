@@ -1,5 +1,6 @@
 #include "env.h"
 #include "context.h"
+#include "function.h"
 #include "../util/string.h"
 #include "../util/debug.h"
 
@@ -66,6 +67,7 @@ struct coy_module_* coy_module_create_(struct coy_env* env, const char* name, bo
     if(stbds_shgetp_null(env->modules, name))
         return NULL;    //< error: module already exists
     struct coy_module_* module = malloc(sizeof(struct coy_module_));
+    module->env = env;
     module->name = coy_strdup_(name, -1);
     module->symbols = NULL;
     stbds_shput(env->modules, module->name, module);
@@ -74,7 +76,12 @@ struct coy_module_* coy_module_create_(struct coy_env* env, const char* name, bo
 
 void coy_module_inject_function_(struct coy_module_* module, const char* name, struct coy_function_* function)
 {
+#if 0   // stb_ds bug
     struct coy_module_symbol_entry_* entry = stbds_shgetp_null(module->symbols, name);
+#else
+    ptrdiff_t entryidx = stbds_shgeti(module->symbols, name);
+    struct coy_module_symbol_entry_* entry = entryidx >= 0 ? &module->symbols[entryidx] : NULL;
+#endif
     if(entry)
     {
         if(!COY_ENSURE(entry->value.category == COY_MODULE_SYMCAT_FUNCTION_, "only functions can be overloaded"))
@@ -91,6 +98,31 @@ void coy_module_inject_function_(struct coy_module_* module, const char* name, s
         stbds_shput(module->symbols, sym.name, sym);
     }
 }
+bool coy_module_link_(struct coy_module_* module)
+{
+    bool ok = true;
+    for(size_t s = 0; s < stbds_shlenu(module->symbols); s++)
+    {
+        const struct coy_module_symbol_* sym = &module->symbols[s].value;
+        // we only link functions (skip others)
+        if(sym->category != COY_MODULE_SYMCAT_FUNCTION_)
+            continue;
+        for(size_t f = 0; f < stbds_arrlenu(sym->u.functions); f++)
+            if(!coy_function_link_(sym->u.functions[f], module))
+                ok = false;
+    }
+    return ok;
+}
+struct coy_module_symbol_* coy_module_find_symbol_(struct coy_module_* module, const char* name)
+{
+#if 0   // stb_ds bug
+    struct coy_module_symbol_entry_* entry = stbds_shgetp_null(module->symbols, name);
+#else
+    ptrdiff_t entryidx = stbds_shgeti(module->symbols, name);
+    struct coy_module_symbol_entry_* entry = entryidx >= 0 ? &module->symbols[entryidx] : NULL;
+#endif
+    return entry ? &entry->value : NULL;
+}
 
 coy_env_t* coy_env_init(coy_env_t* env)
 {
@@ -106,4 +138,15 @@ void coy_env_deinit(coy_env_t* env)
     while(stbds_arrlenu(env->contexts.ptr))
         coy_context_destroy(env->contexts.ptr[0]);
     stbds_shfree(env->modules);
+}
+
+struct coy_module_* coy_env_find_module_(coy_env_t* env, const char* name)
+{
+#if 0   // stb_ds bug
+    struct coy_module_entry_* entry = stbds_shgetp_null(env->modules, name);
+#else
+    ptrdiff_t entryidx = stbds_shgeti(env->modules, name);
+    struct coy_module_entry_* entry = entryidx >= 0 ? &env->modules[entryidx] : NULL;
+#endif
+    return entry ? entry->value : NULL;
 }

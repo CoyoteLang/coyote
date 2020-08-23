@@ -4,6 +4,7 @@
 #include "compiler/codegen.h"
 #include "function_builder.h"
 
+#include "vm/env.h"
 #include "bytecode.h"
 
 #include "stb_ds.h"
@@ -148,6 +149,7 @@ TEST(parser)
 
 TEST(codegen)
 { 
+    ASSERT_TODO("use public function call API (old API crashes)");
     const char src[] =
         "module main;"
         "int foo(int a, int b, int c, int d)\n"
@@ -181,7 +183,7 @@ TEST(codegen)
     coy_env_init(&env);
 
     coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &cctx.module->functions[0], false);
+    coy_context_push_frame_(ctx, &cctx.module->functions[0], false, true);
     coy_push_uint(ctx, 2);
     coy_push_uint(ctx, 3);
     coy_push_uint(ctx, 1);
@@ -458,7 +460,6 @@ TEST(vm_factorial)
 
 TEST(vm_factorial_call)
 {
-    ASSERT_TODO("implement coy_function_verify_{call,retcall}_, and the calls themselves in vm.c");
     static struct coy_typeinfo_ ti_int = {
         COY_TYPEINFO_CAT_INTEGER_,
         {.integer={
@@ -520,7 +521,6 @@ u32 factorial(u32 num)
         }
 
         coy_function_builder_finish_(&builder, &func_factorial);
-        PRECONDITION(coy_function_verify_(&func_factorial));
         coy_module_inject_function_(module, "factorial", &func_factorial);
     }
 
@@ -577,9 +577,11 @@ u32 factpart(u32 num, u32 acc)
         }
 
         coy_function_builder_finish_(&builder, &func_factpart);
-        PRECONDITION(coy_function_verify_(&func_factpart));
         coy_module_inject_function_(module, "factpart", &func_factpart);
     }
+    ASSERT(coy_module_link_(module));
+    PRECONDITION(coy_function_verify_(&func_factorial));
+    PRECONDITION(coy_function_verify_(&func_factpart));
 
     /* ========== execute ========== */
     coy_context_t* ctx = coy_context_create(&env);

@@ -10,6 +10,12 @@
 #include <stdio.h>
 #include <inttypes.h>
 
+#if 1
+#define VERIFY_FAILED   return false
+#else
+#define VERIFY_FAILED   abort()
+#endif
+
 struct coy_memio_
 {
     const uint8_t* data;
@@ -168,7 +174,7 @@ static void coy_function_compute_maxslots_(struct coy_function_* func)
         fprintf(stderr, "Function verify fail(%s:%d): ", __FILE__, __LINE__);   \
         fprintf(stderr, __VA_ARGS__);   \
         fprintf(stderr, "\n");  \
-        /*return false;          */abort(); \
+        VERIFY_FAILED;          \
     } while(0)
 #define COY_VERIFY_(test, ...)  do { if(!(test)) COY_VERIFY_FAIL_(__VA_ARGS__); } while(0)
 #define COY_VERIFY_ARGIDX_(A)   COY_VERIFY_((A) < block->nparams + i, "argument tries to read from a future value %u", (A))
@@ -265,12 +271,12 @@ static bool coy_function_verify_jmpc_(struct coy_function_* func, const struct c
 }
 static bool coy_function_verify_call_(struct coy_function_* func, const struct coy_function_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
 {
-    COY_TODO("verify call");
+    //COY_TODO("verify call");
     return true;
 }
 static bool coy_function_verify_retcall_(struct coy_function_* func, const struct coy_function_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
 {
-    COY_TODO("verify retcall");
+    //COY_TODO("verify retcall");
     return true;
 }
 static bool coy_function_verify_ret_(struct coy_function_* func, const struct coy_function_block_* block, const union coy_instruction_* instr, uint32_t i, coy_bitarray_t isptr, coy_bitarray_t jmpisptr)
@@ -315,6 +321,9 @@ static const struct coy_function_verify_opinfo_ coy_opinfos_[256] = {
 
 static bool coy_function_coy_verify_(struct coy_function_* func)
 {
+    // TODO: Still require linking even if we have no symbols?
+    COY_VERIFY_(func->u.coy.is_linked || !func->u.coy.consts.nsymbols, "function must be linked before use");
+
     uint32_t nblocks = stbds_arrlenu(func->u.coy.blocks);
     uint32_t ninstrs = stbds_arrlenu(func->u.coy.instrs);
     coy_bitarray_t isptr;
@@ -387,6 +396,7 @@ struct coy_function_* coy_function_init_empty_(struct coy_function_* func, const
         func->u.coy.blocks = NULL;
         func->u.coy.instrs = NULL;
         func->u.coy.maxslots = 0;
+        func->u.coy.is_linked = false;
     }
     return func;
 }
@@ -437,4 +447,47 @@ bool coy_function_verify_(struct coy_function_* func)
     }
     else
         return coy_function_coy_verify_(func);
+}
+bool coy_function_link_(struct coy_function_* func, struct coy_module_* module)
+{
+    if(func->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
+        return true;    //< linking always succeeds for native functions
+    if(func->u.coy.is_linked)
+        return true;    //< function was already linked; we'll consider that a success (TODO: relink?)
+    char* buf = NULL;
+    for(size_t c = 0; c < func->u.coy.consts.nsymbols; c++)
+    {
+        const char* fullsym = func->u.coy.consts.data[c].ptr;
+        const char* module_end = strchr(fullsym, ';');
+        if(!COY_ENSURE(module_end, "symbols must have format <module>;<member>, found `%s` instead", fullsym))
+        {
+            stbds_arrfree(buf);
+            return false;
+        }
+        stbds_arrsetlen(buf, module_end - fullsym + 1);
+        memcpy(buf, fullsym, module_end - fullsym);
+        buf[module_end - fullsym] = 0;
+
+        struct coy_module_* symmod = coy_env_find_module_(module->env, buf);
+        if(!COY_ENSURE(symmod, "symbol %s not found (module does not exist)", fullsym))
+        {
+            stbds_arrfree(buf);
+            return false;
+        }
+        struct coy_module_symbol_* sym = coy_module_find_symbol_(symmod, module_end + 1);
+        if(!COY_ENSURE(sym, "symbol %s not found (symbol does not exist in module)", fullsym))
+        {
+            stbds_arrfree(buf);
+            return false;
+        }
+        if(sym->category != COY_MODULE_SYMCAT_FUNCTION_)
+            COY_TODO("linking non-functions");
+        COY_ASSERT(stbds_arrlenu(sym->u.functions));
+        if(stbds_arrlenu(sym->u.functions) > 1)
+            COY_TODO("linking with function overloading");
+        func->u.coy.consts.data[c].ptr = sym->u.functions[0];
+    }
+    stbds_arrfree(buf);
+    func->u.coy.is_linked = true;
+    return true;
 }

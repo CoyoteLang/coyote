@@ -8,6 +8,8 @@
 #define COY_FUNCTION_ATTRIB_NATIVE_ UINT32_C(0x00000001)
 
 struct coy_context;
+struct coy_module_;
+
 typedef int32_t coy_c_function_t(struct coy_context* ctx, void* udata);
 
 union coy_instruction_
@@ -58,7 +60,8 @@ struct coy_function_
             struct coy_function_constants_ consts;
             struct coy_function_block_* blocks;
             union coy_instruction_* instrs;
-            uint32_t maxslots;  //< max number of stack slots used, in any block
+            uint32_t maxslots: 31;  //< max number of stack slots used, in any block
+            uint32_t is_linked: 1;  //< was the function already linked?
         } coy;
         struct
         {
@@ -77,5 +80,6 @@ struct coy_function_* coy_function_init_native_(struct coy_function_* func, cons
 
 void coy_function_coy_compute_maxslots_(struct coy_function_* func);
 bool coy_function_verify_(struct coy_function_* func);
+bool coy_function_link_(struct coy_function_* func, struct coy_module_* module);
 
 #endif /* COY_VM_FUNCTION_H_ */

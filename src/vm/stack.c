@@ -37,3 +37,9 @@ struct coy_stack_segment_* coy_stack_segment_create_(struct coy_context* ctx)
     stbds_arrsetcap(seg->frames, COY_STACK_INITIAL_FRAME_SIZE_);
     return seg;
 }
+
+struct coy_stack_frame_* coy_stack_segment_get_top_frame_(struct coy_stack_segment_* seg)
+{
+    size_t nframes = stbds_arrlenu(seg->frames);
+    return nframes ? &seg->frames[nframes - 1u] : NULL;
+}

@@ -26,8 +26,9 @@ typedef struct coy_context
 coy_context_t* coy_context_create(struct coy_env* env);
 void coy_context_destroy(coy_context_t* ctx);
 
-void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function, bool segmented);
+void coy_context_push_frame_(coy_context_t* ctx, struct coy_function_* function, bool segmented, bool return_native);
 void coy_context_pop_frame_(coy_context_t* ctx);
+#define coy_context_get_top_frame_(ctx) coy_stack_segment_get_top_frame_((ctx)->top)
 
 uint32_t coy_num_slots(coy_context_t* ctx);
 void coy_ensure_slots(coy_context_t* ctx, uint32_t nslots);
