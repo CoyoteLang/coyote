@@ -596,6 +596,126 @@ u32 factpart(u32 num, u32 acc)
     coy_env_deinit(&env);
 }
 
+static int32_t nat_main_add(coy_context_t* ctx, void* udata)
+{
+    // they're made 3 separate statements for debugging reasons (for gdb stepping)
+    uint32_t a = coy_get_uint(ctx, 0);
+    uint32_t b = coy_get_uint(ctx, 1);
+    coy_set_uint(ctx, 0, a + b);
+    return 1;
+}
+static void vm_native_call_prepare(coy_env_t* env, bool use_main, bool use_main_retcall)
+{
+    static struct coy_typeinfo_ ti_uint = {
+        COY_TYPEINFO_CAT_INTEGER_,
+        {.integer={
+            .is_signed=false,
+            .width=32,
+        }},
+        NULL, NULL,
+    };
+    static struct coy_typeinfo_* ti_params_uint_uint[] = {
+        &ti_uint,
+        &ti_uint,
+        NULL,
+    };
+    static struct coy_typeinfo_ ti_function_uint_uint_uint = {
+        COY_TYPEINFO_CAT_FUNCTION_,
+        {.function={
+            .rtype = &ti_uint,
+            .ptypes = ti_params_uint_uint,
+        }},
+        NULL, NULL,
+    };
+    static struct coy_typeinfo_ ti_function_uint = {
+        COY_TYPEINFO_CAT_FUNCTION_,
+        {.function={
+            .rtype = &ti_uint,
+            .ptypes = ti_params_uint_uint + 2,
+        }},
+        NULL, NULL,
+    };
+
+    coy_env_init(env);
+
+    struct coy_module_* module = coy_module_create_(env, "main", false);
+
+    static struct coy_function_ f_main_add;
+    ASSERT(coy_function_init_native_(&f_main_add, &ti_function_uint_uint_uint, COY_FUNCTION_ATTRIB_NATIVE_, nat_main_add, NULL));
+    coy_module_inject_function_(module, "add", &f_main_add);
+
+    static struct coy_function_ f_main_main;
+    if(use_main)
+    {
+        struct coy_function_builder_ builder;
+        PRECONDITION(coy_function_builder_init_(&builder, &ti_function_uint, 0));
+
+        coy_function_builder_block_(&builder, 0, NULL, 0);
+        {
+            uint32_t r = coy_function_builder_op_(&builder, use_main_retcall ? COY_OPCODE_RETCALL : COY_OPCODE_CALL, 0, false);
+                coy_function_builder_arg_const_sym_(&builder, "main;add");
+                coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=5});
+                coy_function_builder_arg_const_val_(&builder, (union coy_register_){.u32=7});
+                if(!use_main_retcall)
+                {
+                    coy_function_builder_op_(&builder, COY_OPCODE_RET, 0, false);
+                    coy_function_builder_arg_reg_(&builder, r);
+                }
+        }
+        coy_function_builder_finish_(&builder, &f_main_main);
+        coy_module_inject_function_(module, "main", &f_main_main);
+    }
+
+    PRECONDITION(coy_module_link_(module));
+    if(use_main)
+        PRECONDITION(coy_function_verify_(&f_main_main));
+}
+TEST(vm_native_call)
+{
+    coy_env_t env;
+    vm_native_call_prepare(&env, true, false);
+
+    coy_context_t* ctx = coy_context_create(&env);
+
+    // test if native->coyote->native calls work
+    ASSERT(coy_call(ctx, "main", "main"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 5 + 7);
+    printf("RESULT: %" PRIu32 "\n", coy_get_uint(ctx, 0));
+
+    coy_env_deinit(&env);
+}
+TEST(vm_native_retcall)
+{
+    coy_env_t env;
+    vm_native_call_prepare(&env, true, true);
+
+    coy_context_t* ctx = coy_context_create(&env);
+
+    // test if native->coyote->native calls work
+    ASSERT(coy_call(ctx, "main", "main"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 5 + 7);
+    printf("RESULT: %" PRIu32 "\n", coy_get_uint(ctx, 0));
+
+    coy_env_deinit(&env);
+}
+TEST(vm_native_call_direct)
+{
+    coy_env_t env;
+    vm_native_call_prepare(&env, false, false);
+
+    coy_context_t* ctx = coy_context_create(&env);
+
+    // test if native->native calls work
+    coy_ensure_slots(ctx, 2);
+    coy_set_uint(ctx, 0, 10);
+    coy_set_uint(ctx, 1, 15);
+    ASSERT(coy_call(ctx, "main", "add"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 10 + 15);
+    printf("RESULT: %" PRIu32 "\n", coy_get_uint(ctx, 0));
+
+    coy_env_deinit(&env);
+}
+
 int main()
 {
     TEST_EXEC(stb_ds);
@@ -607,5 +727,8 @@ int main()
     TEST_EXEC(function_builder_verify);
     TEST_EXEC(vm_factorial);
     TEST_EXEC(vm_factorial_call);
+    TEST_EXEC(vm_native_call);
+    TEST_EXEC(vm_native_retcall);
+    TEST_EXEC(vm_native_call_direct);
     return TEST_REPORT();
 }

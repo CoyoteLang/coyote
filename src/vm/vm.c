@@ -214,7 +214,20 @@ static bool coy_op_handle_call_(coy_context_t* ctx, struct coy_stack_segment_* s
     COY_ASSERT(isptr);
     if(func->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
     {
-        COY_TODO("coy->native calls");
+        coy_slots_setlen_(&ctx->slots, instr->op.nargs - 1);
+        for(uint32_t a = 0; a < instr->op.nargs - 1u; a++)
+            coy_op_copyreg_(&ctx->slots, a, seg, frame, instr[2+a]);
+        COY_ASSERT(func->u.nat.handler);
+        int32_t status = func->u.nat.handler(ctx, func->u.nat.udata);
+        COY_CHECK_MSG(0 <= status, "user: error in function");
+        // multiple returns are not (yet?) implemented
+        COY_CHECK_MSG(status <= 1, "too many return values from function");
+        if(status)
+        {
+            bool isptr;
+            union coy_register_ reg = coy_slots_get_(&ctx->slots, 0, &isptr);
+            coy_slots_set_(&seg->slots, dstreg, reg, isptr);
+        }
     }
     else
     {
@@ -235,23 +248,50 @@ static bool coy_op_handle_retcall_(coy_context_t* ctx, struct coy_stack_segment_
     bool isptr;
     struct coy_function_* nfunction = coy_op_getreg_(seg, frame, instr[1], &isptr).ptr;
     COY_ASSERT(isptr);
-    struct coy_stack_frame_ nframe = {0};
-    uint32_t nargs = instr->op.nargs - 1u;
-    COY_CHECK(nargs == nfunction->u.coy.blocks[0].nparams);
-    nframe.fp = frame->fp;
-    nframe.bp = frame->fp + nargs;
-    nframe.block = 0;
-    nframe.return_native = frame->return_native;
-    nframe.pc = 0;
-    nframe.function = nfunction;
-    // move temp <= stack
-    for(size_t i = 0; i < nargs; i++)
-        coy_op_copyreg_(&ctx->slots, i, seg, frame, instr[2+i]);
-    coy_slots_setlen_(&seg->slots, nframe.fp + nfunction->u.coy.maxslots);
-    // move stack <= temp
-    for(size_t i = 0; i < nargs; i++)
-        coy_slots_copy_(&seg->slots, nframe.fp + i, &ctx->slots, i);
-    *frame = nframe;
+    if(nfunction->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
+    {
+        coy_slots_setlen_(&ctx->slots, instr->op.nargs - 1);
+        for(uint32_t a = 0; a < instr->op.nargs - 1u; a++)
+            coy_op_copyreg_(&ctx->slots, a, seg, frame, instr[2+a]);
+        bool old_return_native = frame->return_native;
+        uint32_t old_fp = frame->fp;
+        coy_context_pop_frame_(ctx);
+        uint32_t nframes = stbds_arrlenu(ctx->top->frames);
+        COY_ASSERT(nfunction->u.nat.handler);
+        int32_t status = nfunction->u.nat.handler(ctx, nfunction->u.nat.udata);
+        COY_CHECK_MSG(0 <= status, "user: error in function");
+        // multiple returns are not (yet?) implemented
+        COY_CHECK_MSG(status <= 1, "too many return values from function");
+        if(old_return_native)
+            coy_slots_setlen_(&ctx->slots, status);
+        else if(status)
+        {
+            frame = &ctx->top->frames[nframes - 1u];
+            bool isptr;
+            union coy_register_ reg = coy_slots_get_(&ctx->slots, 0, &isptr);
+            coy_slots_set_(&seg->slots, old_fp, reg, isptr);
+        }
+    }
+    else
+    {
+        struct coy_stack_frame_ nframe = {0};
+        uint32_t nargs = instr->op.nargs - 1u;
+        COY_CHECK(nargs == nfunction->u.coy.blocks[0].nparams);
+        nframe.fp = frame->fp;
+        nframe.bp = frame->fp + nargs;
+        nframe.block = 0;
+        nframe.return_native = frame->return_native;
+        nframe.pc = 0;
+        nframe.function = nfunction;
+        // move temp <= stack
+        for(size_t i = 0; i < nargs; i++)
+            coy_op_copyreg_(&ctx->slots, i, seg, frame, instr[2+i]);
+        coy_slots_setlen_(&seg->slots, nframe.fp + nfunction->u.coy.maxslots);
+        // move stack <= temp
+        for(size_t i = 0; i < nargs; i++)
+            coy_slots_copy_(&seg->slots, nframe.fp + i, &ctx->slots, i);
+        *frame = nframe;
+    }
     return false;
 }
 static bool coy_op_handle_ret_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
@@ -312,6 +352,7 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
         coy_slots_setlen_(&seg->slots, slen);
         if(func->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
         {
+            COY_ASSERT_MSG(false, "somehow ended up with native function in frame");
             int32_t ret = func->u.nat.handler(ctx, func->u.nat.udata);
             if(ret < 0)
                 abort();    // error in cfunc
@@ -382,14 +423,24 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
 
 bool coy_vm_call_(struct coy_context* ctx, struct coy_function_* function, bool segmented)
 {
+    if(function->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
+    {
+        COY_ASSERT(function->u.nat.handler);
+        int32_t ret = function->u.nat.handler(ctx, function->u.nat.udata);
+        if(ret < 0)
+            return false;
+        // multiple returns are not (yet?) implemented
+        COY_CHECK_MSG(ret <= 1, "too many return values from function");
+        coy_slots_setlen_(&ctx->slots, ret);
+        return true;
+    }
     if(!COY_ENSURE(function->u.coy.blocks[0].nparams <= coy_slots_getlen_(&ctx->slots), "misuse: invalid number of parameters passed to the function"))
         return false;
     coy_context_push_frame_(ctx, function, segmented, true);
     struct coy_stack_frame_* frame = coy_context_get_top_frame_(ctx);
     COY_ASSERT(frame);
     memcpy(ctx->top->slots.regs + frame->fp, ctx->slots.regs, function->u.coy.blocks[0].nparams * sizeof(union coy_register_));
-    if(!(function->attrib & COY_FUNCTION_ATTRIB_NATIVE_))
-        coy_slots_setlen_(&ctx->slots, function->u.coy.maxslots);   //< TODO: set # of slots to maxparams (a lower number) to save memory
+    coy_slots_setlen_(&ctx->slots, function->u.coy.maxslots);   //< TODO: set # of slots to maxparams (a lower number) to save memory
     coy_vm_exec_frame_(ctx);
     return true;
 }
