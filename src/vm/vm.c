@@ -217,9 +217,11 @@ static bool coy_op_handle_call_(coy_context_t* ctx, struct coy_stack_segment_* s
     else
     {
         uint32_t frameidx = frame - seg->frames;
+        frame->pc -= 1u + instr->op.nargs;  // workaround: push_frame_ relies on pc being at the *start* of a frame (TODO: remove this)
         coy_context_push_frame_(ctx, func, false, false);
         // pushing a frame could invalidate the pointer, so we fix this up
         frame = &seg->frames[frameidx];
+        frame->pc += 1u + instr->op.nargs;  // workaround: undo change done for push_frame_ (TODO: remove this)
         struct coy_stack_frame_* nframe = &seg->frames[stbds_arrlenu(seg->frames) - 1u];
         for(uint32_t a = 0; a < instr->op.nargs; a++)
             coy_op_copyreg_(&seg->slots, nframe->fp + a, seg, frame, instr[2+a]);
