@@ -209,7 +209,9 @@ static bool coy_op_handle_jmpc_(coy_context_t* ctx, struct coy_stack_segment_* s
 static bool coy_op_handle_call_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
     // TODO: verify type
-    struct coy_function_* func = coy_op_getreg_(seg, frame, instr[1], NULL).ptr;
+    bool isptr;
+    struct coy_function_* func = coy_op_getreg_(seg, frame, instr[1], &isptr).ptr;
+    COY_ASSERT(isptr);
     if(func->attrib & COY_FUNCTION_ATTRIB_NATIVE_)
     {
         COY_TODO("coy->native calls");
