@@ -225,7 +225,7 @@ static bool coy_op_handle_call_(coy_context_t* ctx, struct coy_stack_segment_* s
         frame = &seg->frames[frameidx];
         frame->pc += 1u + instr->op.nargs;  // workaround: undo change done for push_frame_ (TODO: remove this)
         struct coy_stack_frame_* nframe = &seg->frames[stbds_arrlenu(seg->frames) - 1u];
-        for(uint32_t a = 0; a < instr->op.nargs; a++)
+        for(uint32_t a = 0; a < instr->op.nargs - 1u; a++)
             coy_op_copyreg_(&seg->slots, nframe->fp + a, seg, frame, instr[2+a]);
     }
     //coy_op_handle_jmp_helper_(ctx, seg, frame, instr, 0, 1, instr->op.nargs);
