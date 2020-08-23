@@ -228,7 +228,6 @@ static bool coy_op_handle_call_(coy_context_t* ctx, struct coy_stack_segment_* s
         for(uint32_t a = 0; a < instr->op.nargs - 1u; a++)
             coy_op_copyreg_(&seg->slots, nframe->fp + a, seg, frame, instr[2+a]);
     }
-    //coy_op_handle_jmp_helper_(ctx, seg, frame, instr, 0, 1, instr->op.nargs);
     return false;
 }
 static bool coy_op_handle_retcall_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
