@@ -127,7 +127,10 @@ bool coy_call(coy_context_t* ctx, const char* module_name, const char* function_
         return false;
     struct coy_function_* func;
     if(stbds_arrlenu(sentry->value.u.functions) > 1)
+    {
         COY_TODO("overloaded function resolution");
+        return false;   //< unreachable, but to avoid a maybe-uninitialized warning
+    }
     else
         func = sentry->value.u.functions[0];
     coy_vm_call_(ctx, func, false);

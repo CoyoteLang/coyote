@@ -265,7 +265,7 @@ TEST(semantic_analysis) {
                         }
                         ASSERT_EQ_INT(count, 1);
                         break;}
-                    default: ASSERT_TODO("semalysis test%lu", i);
+                    default: ASSERT_TODO("semalysis test%" PRIu64, (uint64_t)i);
                 }
             }
             coyc_tree_free(&pctx);
