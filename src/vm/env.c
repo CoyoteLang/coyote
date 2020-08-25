@@ -130,6 +130,7 @@ coy_env_t* coy_env_init(coy_env_t* env)
     env->contexts.ptr = NULL;
     env->contexts.next_id = 1;
     env->modules = NULL;
+    env->typeinfos = NULL;
     return env;
 }
 void coy_env_deinit(coy_env_t* env)

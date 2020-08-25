@@ -1,6 +1,7 @@
 #ifndef COY_VM_ENV_H_
 #define COY_VM_ENV_H_
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -8,6 +9,7 @@ struct coy_env;
 struct coy_context;
 struct coy_module_symbol_entry_;
 struct coy_module_entry_;
+struct coy_typeinfo_;
 
 // TODO: I really dislike how this essentially duplicates type info; but it's kind of necessary for function overloading. Taking ideas; the only idea I have is to make the whole thing a multiset, but only allow multiple values for functions.
 enum coy_module_symbol_category_
@@ -49,6 +51,11 @@ struct coy_module_entry_
     char* key;
     struct coy_module_* value;
 };
+struct coy_typeinfo_entry_
+{
+    char* key;
+    struct coy_typeinfo_* value;
+};
 
 struct coy_module_* coy_module_create_(struct coy_env* env, const char* name, bool allow_reserved);
 
@@ -67,6 +74,8 @@ typedef struct coy_env
         uint32_t next_id;
     } contexts;
     struct coy_module_entry_* modules;
+    // these are interned
+    struct coy_typeinfo_entry_* typeinfos;
 } coy_env_t;
 
 coy_env_t* coy_env_init(coy_env_t* env);

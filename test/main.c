@@ -260,7 +260,7 @@ TEST(semantic_analysis) {
                         ASSERT(root.decls[0].function.type.u.function.ptypes);
                         ASSERT(root.decls[0].function.type.u.function.ptypes[0]);
                         size_t count = 0;
-                        for (struct coy_typeinfo_ **T = root.decls[0].function.type.u.function.ptypes; *T; T += 1, count = count + 1) {
+                        for (const struct coy_typeinfo_ * const*T = root.decls[0].function.type.u.function.ptypes; *T; T += 1, count = count + 1) {
                             ASSERT_EQ_PTR(*T, root.decls[0].function.parameters + count);
                         }
                         ASSERT_EQ_INT(count, 1);
@@ -277,29 +277,73 @@ TEST(semantic_analysis) {
     }
 }
 
+TEST(typeinfo_integer)
+{
+    // check whether all the integers are correct
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 8, true)->repr, "byte");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 8, false)->repr, "ubyte");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 16, true)->repr, "short");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 16, false)->repr, "ushort");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 32, true)->repr, "int");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 32, false)->repr, "uint");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 64, true)->repr, "long");
+    ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 64, false)->repr, "ulong");
+    //ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 128, true)->repr, "cent");
+    //ASSERT_EQ_STR(coy_typeinfo_integer_(&env, 128, false)->repr, "ucent");
+
+    coy_env_deinit(&env);
+}
+TEST(typeinfo_array)
+{
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_int_array = coy_typeinfo_array_(&env, ti_int, 1);
+
+    ASSERT_EQ_STR(ti_int_array->repr, "int[]");
+    ASSERT_EQ_STR(coy_typeinfo_array_(&env, ti_int, 2)->repr, "int[,]");
+    ASSERT_EQ_STR(coy_typeinfo_array_(&env, ti_int, 3)->repr, "int[,,]");
+    ASSERT_EQ_STR(coy_typeinfo_array_(&env, ti_int_array, 4)->repr, "int[][,,,]");
+
+    coy_env_deinit(&env);
+}
+TEST(typeinfo_function)
+{
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_function_int_int_int = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int, ti_int}, 2);
+
+    ASSERT_EQ_STR(ti_function_int_int_int->repr, "int(int,int)");
+
+    coy_env_deinit(&env);
+}
+TEST(typeinfo_intern_dedup)
+{
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_func1 = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int, ti_int}, 2);
+    struct coy_typeinfo_* ti_func2 = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int, ti_int}, 2);
+
+    ASSERT_EQ_PTR(ti_func1, ti_func2);
+
+    coy_env_deinit(&env);
+}
+
 TEST(vm_basic)
 {
-    static struct coy_typeinfo_ ti_int = {
-        COY_TYPEINFO_CAT_INTEGER_,
-        {.integer={
-            .is_signed=true,
-            .width=32,
-        }},
-        NULL, NULL,
-    };
-    static struct coy_typeinfo_* ti_params_int_int[] = {
-        &ti_int,
-        &ti_int,
-        NULL,
-    };
-    static struct coy_typeinfo_ ti_function_int_int_int = {
-        COY_TYPEINFO_CAT_FUNCTION_,
-        {.function={
-            .rtype = &ti_int,
-            .ptypes = ti_params_int_int,
-        }},
-        NULL, NULL,
-    };
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_function_int_int_int = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int, ti_int}, 2);
 
     static const struct coy_function_block_ in_blocks[] = {
         {0,2,NULL},  //entry
@@ -314,15 +358,12 @@ TEST(vm_basic)
     };
 
     struct coy_function_ func;
-    coy_function_init_empty_(&func, &ti_function_int_int_int, 0);
+    coy_function_init_empty_(&func, ti_function_int_int_int, 0);
     stbds_arrsetlen(func.u.coy.blocks, sizeof(in_blocks) / sizeof(*in_blocks));
     memcpy(func.u.coy.blocks, in_blocks, sizeof(in_blocks));
     stbds_arrsetlen(func.u.coy.instrs, sizeof(in_instrs) / sizeof(*in_instrs));
     memcpy(func.u.coy.instrs, in_instrs, sizeof(in_instrs));
     coy_function_coy_compute_maxslots_(&func);
-
-    coy_env_t env;
-    coy_env_init(&env);
 
     struct coy_module_* module = coy_module_create_(&env, "main", false);
     coy_module_inject_function_(module, "add", &func);
@@ -342,29 +383,14 @@ TEST(vm_basic)
 
 static void function_builder_prepare(struct coy_function_* func, bool precondition)
 {
-    static struct coy_typeinfo_ ti_int = {
-        COY_TYPEINFO_CAT_INTEGER_,
-        {.integer={
-            .is_signed=true,
-            .width=32,
-        }},
-        NULL, NULL,
-    };
-    static struct coy_typeinfo_* ti_params_int[] = {
-        &ti_int,
-        NULL,
-    };
-    static struct coy_typeinfo_ ti_function_int_int = {
-        COY_TYPEINFO_CAT_FUNCTION_,
-        {.function={
-            .rtype = &ti_int,
-            .ptypes = ti_params_int,
-        }},
-        NULL, NULL,
-    };
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_function_int_int = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int}, 1);
 
     struct coy_function_builder_ builder;
-    PRECONDITION(coy_function_builder_init_(&builder, &ti_function_int_int, 0));
+    PRECONDITION(coy_function_builder_init_(&builder, ti_function_int_int, 0));
 
 /*
 u32 factorial(u32 num)
@@ -429,6 +455,8 @@ u32 factorial(u32 num)
         PRECONDITION(coy_function_verify_(func));
     else
         ASSERT(coy_function_verify_(func));
+
+    coy_env_deinit(&env);
 }
 TEST(function_builder_verify)
 {
@@ -460,39 +488,12 @@ TEST(vm_factorial)
 
 TEST(vm_factorial_call)
 {
-    static struct coy_typeinfo_ ti_int = {
-        COY_TYPEINFO_CAT_INTEGER_,
-        {.integer={
-            .is_signed=true,
-            .width=32,
-        }},
-        NULL, NULL,
-    };
-    static struct coy_typeinfo_* ti_params_int_int[] = {
-        &ti_int,
-        &ti_int,
-        NULL,
-    };
-    static struct coy_typeinfo_ ti_function_int_int_int = {
-        COY_TYPEINFO_CAT_FUNCTION_,
-        {.function={
-            .rtype = &ti_int,
-            .ptypes = ti_params_int_int,
-        }},
-        NULL, NULL,
-    };
-    static struct coy_typeinfo_ ti_function_int_int = {
-        COY_TYPEINFO_CAT_FUNCTION_,
-        {.function={
-            .rtype = &ti_int,
-            .ptypes = ti_params_int_int + 1, //< the offset skips the first `int`
-        }},
-        NULL, NULL,
-    };
-
-
     coy_env_t env;
     coy_env_init(&env);
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_function_int_int = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int}, 1);
+    struct coy_typeinfo_* ti_function_int_int_int = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int,ti_int}, 2);
 
     struct coy_module_* module = coy_module_create_(&env, "main", false);
 
@@ -504,7 +505,7 @@ u32 factorial(u32 num)
     $1 = call factpart($0, 1)
     ret $1
 */
-    PRECONDITION(coy_function_builder_init_(&builder, &ti_function_int_int, 0));
+    PRECONDITION(coy_function_builder_init_(&builder, ti_function_int_int, 0));
     struct coy_function_ func_factorial;
     {
         uint32_t b0_entry = coy_function_builder_block_(&builder, 1, NULL, 0);
@@ -538,7 +539,7 @@ u32 factpart(u32 num, u32 acc)
 .2_end(acc):
     ret $0
 */
-    PRECONDITION(coy_function_builder_init_(&builder, &ti_function_int_int_int, 0));
+    PRECONDITION(coy_function_builder_init_(&builder, ti_function_int_int_int, 0));
     struct coy_function_ func_factpart;
     {
         uint32_t b0_entry = coy_function_builder_block_(&builder, 2, NULL, 0);
@@ -606,49 +607,23 @@ static int32_t nat_main_add(coy_context_t* ctx, void* udata)
 }
 static void vm_native_call_prepare(coy_env_t* env, bool use_main, bool use_main_retcall)
 {
-    static struct coy_typeinfo_ ti_uint = {
-        COY_TYPEINFO_CAT_INTEGER_,
-        {.integer={
-            .is_signed=false,
-            .width=32,
-        }},
-        NULL, NULL,
-    };
-    static struct coy_typeinfo_* ti_params_uint_uint[] = {
-        &ti_uint,
-        &ti_uint,
-        NULL,
-    };
-    static struct coy_typeinfo_ ti_function_uint_uint_uint = {
-        COY_TYPEINFO_CAT_FUNCTION_,
-        {.function={
-            .rtype = &ti_uint,
-            .ptypes = ti_params_uint_uint,
-        }},
-        NULL, NULL,
-    };
-    static struct coy_typeinfo_ ti_function_uint = {
-        COY_TYPEINFO_CAT_FUNCTION_,
-        {.function={
-            .rtype = &ti_uint,
-            .ptypes = ti_params_uint_uint + 2,
-        }},
-        NULL, NULL,
-    };
-
     coy_env_init(env);
+
+    struct coy_typeinfo_* ti_uint = coy_typeinfo_integer_(env, 32, false);
+    struct coy_typeinfo_* ti_function_uint = coy_typeinfo_function_(env, ti_uint, NULL, 0);
+    struct coy_typeinfo_* ti_function_uint_uint_uint = coy_typeinfo_function_(env, ti_uint, (const struct coy_typeinfo_*[]){ti_uint,ti_uint}, 2);
 
     struct coy_module_* module = coy_module_create_(env, "main", false);
 
     static struct coy_function_ f_main_add;
-    ASSERT(coy_function_init_native_(&f_main_add, &ti_function_uint_uint_uint, COY_FUNCTION_ATTRIB_NATIVE_, nat_main_add, NULL));
+    ASSERT(coy_function_init_native_(&f_main_add, ti_function_uint_uint_uint, COY_FUNCTION_ATTRIB_NATIVE_, nat_main_add, NULL));
     coy_module_inject_function_(module, "add", &f_main_add);
 
     static struct coy_function_ f_main_main;
     if(use_main)
     {
         struct coy_function_builder_ builder;
-        PRECONDITION(coy_function_builder_init_(&builder, &ti_function_uint, 0));
+        PRECONDITION(coy_function_builder_init_(&builder, ti_function_uint, 0));
 
         coy_function_builder_block_(&builder, 0, NULL, 0);
         {
@@ -722,6 +697,10 @@ int main()
     TEST_EXEC(lexer);
     TEST_EXEC(parser);
     TEST_EXEC(semantic_analysis);
+    TEST_EXEC(typeinfo_integer);
+    TEST_EXEC(typeinfo_array);
+    TEST_EXEC(typeinfo_function);
+    TEST_EXEC(typeinfo_intern_dedup);
     TEST_EXEC(vm_basic);
     TEST_EXEC(codegen);
     TEST_EXEC(function_builder_verify);
