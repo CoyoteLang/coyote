@@ -135,7 +135,11 @@ static int test_report_(void)
 
 #define TEST_RESULT_(STATUS, FILE, LINE, ...)   do { TEST_results.status = (STATUS); TEST_PRINT_ERROR_(__VA_ARGS__); TEST_results.context.file = FILE; TEST_results.context.line = LINE; } while(0)
 #define TEST_RETURN_(STATUS, ...)   do { TEST_RESULT_(STATUS, __FILE__, __LINE__, __VA_ARGS__); return; } while(0)
+#ifdef TEST_TRAP_ON_FAIL
+#define TEST_HELPER_(HELPER, ...)   do { if(!HELPER(__VA_ARGS__, __FILE__, __LINE__)) __builtin_trap(); } while(0)
+#else
 #define TEST_HELPER_(HELPER, ...)   do { if(!HELPER(__VA_ARGS__, __FILE__, __LINE__)) return; } while(0)
+#endif
 
 #define TEST(NAME)              static void test_##NAME()
 #define TEST_EXEC(NAME)                                                 \

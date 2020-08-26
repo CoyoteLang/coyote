@@ -131,79 +131,46 @@ TEST(parser)
     ASSERT_EQ_INT(func.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
     ASSERT_EQ_INT(func.return_type.u.integer.is_signed, true);
     ASSERT_EQ_INT(func.return_type.u.integer.width, 32);
-    ASSERT(func.statements);
-    ASSERT_EQ_UINT(arrlen(func.statements), 1);
-    statement_t stmt = func.statements[0];
+    ASSERT(func.blocks);
+    ASSERT_EQ_UINT(arrlenu(func.blocks), 1);
+    block_t block = func.blocks[0];
+    ASSERT_EQ_UINT(arrlen(block.statements), 1);
+    statement_t stmt = block.statements[0];
     ASSERT_EQ_INT(stmt.type, return_);
-    ASSERT(stmt.return_.value);
-    ASSERT_EQ_INT(stmt.return_.value->lhs.type, literal);
-    ASSERT_EQ_INT(stmt.return_.value->rhs.type, none);
+    ASSERT(stmt.expr.value);
+    ASSERT_EQ_INT(stmt.expr.value->lhs.type, literal);
+    ASSERT_EQ_INT(stmt.expr.value->rhs.type, none);
     // Integer type isn't resolved until sema runs
-    ASSERT_EQ_INT(stmt.return_.value->type.category, COY_TYPEINFO_CAT_INTERNAL_);
-    ASSERT_EQ_INT(stmt.return_.value->lhs.literal.value.integer.value, 0);
+    ASSERT_EQ_INT(stmt.expr.value->type.category, COY_TYPEINFO_CAT_INTERNAL_);
+    ASSERT_EQ_INT(stmt.expr.value->lhs.literal.value.integer.value, 0);
     // Finally, clean up. Note that I only do this so Valgrind doesn't complain;
     // this will be handled by the OS anyways.
     coyc_tree_free(&ctx);
     coyc_lexer_deinit(&lexer);
 }
 
-TEST(codegen)
-{ 
-    ASSERT_TODO("use public function call API (old API crashes)");
-    const char src[] =
-        "module main;"
-        "int foo(int a, int b, int c, int d)\n"
-        "{\n"
-        // 2, 3, 1, 24
-        "    return (((a * b)) / c) - ((d / a) / a);\n"
-        "}\n";
-        // 9 - (8 / 3)
-    coyc_pctx_t pctx;
-    ast_root_t root;
-    coyc_lexer_t lexer;
-    PRECONDITION(coyc_lexer_init(&lexer, "<src>", src, sizeof(src) - 1));
-    pctx.lexer = &lexer;
-    pctx.root = &root;
-    coyc_parse(&pctx);
-    ASSERT_EQ_STR(pctx.err_msg, NULL);
-    char *smsg = coyc_semalysis(&root);
-    ASSERT_EQ_STR(smsg, NULL);
-
-    coyc_cctx_t cctx = coyc_codegen(&root);
-    ASSERT_EQ_STR(cctx.err_msg, NULL);
-    ASSERT(cctx.module);
-    ASSERT(cctx.module->functions);
-    ASSERT_EQ_INT(arrlenu(cctx.module->functions), 1);
-    ASSERT(coy_function_verify_(cctx.module->functions));
-
-    coyc_tree_free(&pctx);
-    coyc_lexer_deinit(&lexer);
-
-    coy_env_t env;
-    coy_env_init(&env);
-
-    coy_context_t* ctx = coy_context_create(&env);
-    coy_context_push_frame_(ctx, &cctx.module->functions[0], false, true);
-    coy_push_uint(ctx, 2);
-    coy_push_uint(ctx, 3);
-    coy_push_uint(ctx, 1);
-    coy_push_uint(ctx, 24);
-    // will be replaced to use public API at some point, so just declare the function here
-    extern void coy_vm_exec_frame_(coy_context_t*);
-    coy_vm_exec_frame_(ctx);
-
-    ASSERT_EQ_UINT(coy_slots_getval_(&ctx->top->slots, 0).u32, 0);
-
-    coyc_cg_free(cctx);
-
-    coy_env_deinit(&env);
-}
-
 const char *sema_test_srcs[] = {
     "module 1;",
+
     "module test;\n"
     "module 2;",
+
     "int a() {}",
+
+    "module function_call;\n"
+    "\n"
+    "int a() {}\n"
+    "int b() {\n"
+    "\ta();\n"
+    "}\n",
+
+    "module main;"
+    "int foo(int a, int b, int c, int d)\n"
+    "{\n"
+    // 2, 3, 1, 24
+    "    return (((a * b)) / c) - ((d / a) / a);\n"
+    "}\n",
+
     "module factorial;\n"
     "u32 factorial(uint num) {\n"
     "\tif (num < 2) return 1;\n"
@@ -216,9 +183,13 @@ const char *bad_parse_msgs[] = {
     "Duplicate module statement found!",
     "Missing a module statement!",
     NULL,
+    NULL,
+    NULL,
 };
 
 const char *bad_sema_msgs[] = {
+    NULL,
+    NULL,
     NULL,
     NULL,
     NULL,
@@ -232,6 +203,11 @@ TEST(semantic_analysis) {
     PRECONDITION(src_size == pmsg_size && "Forgot to add a parser error message (or NULL)");
     PRECONDITION(src_size == smsg_size && "Forgot to add a compilation error message (or NULL)");
     for (size_t i = 0; i < src_size; i += 1) {
+        if (i == 4) {
+            // Covered by codegen, I'll add this eventually
+            printf("Reminder to add in sema4 test, not important though.\n");
+            continue;
+        }
         PRECONDITION(sema_test_srcs[i]);
         coyc_lexer_t lexer;
         PRECONDITION(coyc_lexer_init(&lexer, "<semalysis_test>", sema_test_srcs[i], strlen(sema_test_srcs[i])));
@@ -247,23 +223,41 @@ TEST(semantic_analysis) {
             if (!bad_sema_msgs[i]) {
                 // Semalysis modifies the tree *in place*, so we can just check it now
                 switch (i) {
-                    case 3:{
+                    case 3:
+                        break;
+                    case 5:{
                         ASSERT_EQ_INT(arrlenu(root.decls), 1);
                         ASSERT_EQ_INT(root.decls[0].base.type, function);
                         ASSERT_EQ_STR(root.decls[0].base.name, "factorial");
-                        ASSERT_EQ_INT(root.decls[0].function.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
-                        ASSERT_EQ_INT(root.decls[0].function.return_type.u.integer.is_signed, false);
-                        ASSERT_EQ_INT(root.decls[0].function.return_type.u.integer.width, 32);
-                        ASSERT_EQ_INT(root.decls[0].function.type.category, COY_TYPEINFO_CAT_FUNCTION_);
-                        ASSERT(coy_type_eql_(*root.decls[0].function.type.u.function.rtype, root.decls[0].function.return_type));
-                        ASSERT_EQ_INT(arrlen(root.decls[0].function.parameters), 1);
-                        ASSERT(root.decls[0].function.type.u.function.ptypes);
-                        ASSERT(root.decls[0].function.type.u.function.ptypes[0]);
+                        function_t func = root.decls[0].function;
+                        ASSERT_EQ_INT(func.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
+                        ASSERT_EQ_INT(func.return_type.u.integer.is_signed, false);
+                        ASSERT_EQ_INT(func.return_type.u.integer.width, 32);
+                        ASSERT_EQ_INT(func.type.category, COY_TYPEINFO_CAT_FUNCTION_);
+                        ASSERT(coy_type_eql_(*func.type.u.function.rtype, func.return_type));
+                        ASSERT_EQ_INT(arrlen(func.parameters), 1);
+                        ASSERT(func.type.u.function.ptypes);
+                        ASSERT(func.type.u.function.ptypes[0]);
+                        const struct coy_typeinfo_ *ptype = func.type.u.function.ptypes[0];
+                        ASSERT_EQ_INT(ptype->category, COY_TYPEINFO_CAT_INTEGER_);
+                        ASSERT_EQ_INT(ptype->u.integer.is_signed, false);
+                        ASSERT_EQ_INT(ptype->u.integer.width, 32);
                         size_t count = 0;
                         for (const struct coy_typeinfo_ * const*T = root.decls[0].function.type.u.function.ptypes; *T; T += 1, count = count + 1) {
                             ASSERT_EQ_PTR(*T, root.decls[0].function.parameters + count);
+                            ASSERT_EQ_PTR(*T, func.parameters + count);
                         }
                         ASSERT_EQ_INT(count, 1);
+                        // 3 blocks: conditional jump, `return 1`, `return factorial`
+                        ASSERT_EQ_INT(arrlenu(func.blocks), 3);
+                        // Conditional
+                        ASSERT_EQ_INT(arrlenu(func.blocks[0].statements), 1);
+                        statement_t cond= func.blocks[0].statements[0];
+                        ASSERT_EQ_INT(cond.type, conditional);
+                        // Return 1
+                        ASSERT_EQ_INT(arrlenu(func.blocks[1].statements), 1);
+                        // Tail call
+                        ASSERT_EQ_INT(arrlenu(func.blocks[2].statements), 1);
                         break;}
                     default: ASSERT_TODO("semalysis test%" PRIu64, (uint64_t)i);
                 }
@@ -296,6 +290,7 @@ TEST(typeinfo_integer)
 
     coy_env_deinit(&env);
 }
+
 TEST(typeinfo_array)
 {
     coy_env_t env;
@@ -311,6 +306,7 @@ TEST(typeinfo_array)
 
     coy_env_deinit(&env);
 }
+
 TEST(typeinfo_function)
 {
     coy_env_t env;
@@ -323,6 +319,7 @@ TEST(typeinfo_function)
 
     coy_env_deinit(&env);
 }
+
 TEST(typeinfo_intern_dedup)
 {
     coy_env_t env;
@@ -333,8 +330,48 @@ TEST(typeinfo_intern_dedup)
     struct coy_typeinfo_* ti_func2 = coy_typeinfo_function_(&env, ti_int, (const struct coy_typeinfo_*[]){ti_int, ti_int}, 2);
 
     ASSERT_EQ_PTR(ti_func1, ti_func2);
-
     coy_env_deinit(&env);
+}
+
+TEST(codegen)
+{
+        // 9 - (8 / 3)
+    coyc_pctx_t pctx;
+    ast_root_t root;
+    coyc_lexer_t lexer;
+    for (int i = 4; i <= 5; i += 1) {
+        const char *src = sema_test_srcs[i];
+        PRECONDITION(coyc_lexer_init(&lexer, "<src>", src, strlen(src) - 1));
+        pctx.lexer = &lexer;
+        pctx.root = &root;
+        coyc_parse(&pctx);
+        ASSERT_EQ_STR(pctx.err_msg, NULL);
+        char *smsg = coyc_semalysis(&root);
+        ASSERT_EQ_STR(smsg, NULL);
+
+        coyc_cctx_t cctx = coyc_codegen(&root);
+        ASSERT_EQ_STR(cctx.err_msg, NULL);
+        ASSERT(cctx.module);
+
+        coyc_tree_free(&pctx);
+        coyc_lexer_deinit(&lexer);
+
+        coy_context_t* ctx = coy_context_create(&cctx.env);
+        switch (i) {
+        case 4:
+            coy_ensure_slots(ctx, 4);
+            coy_set_uint(ctx, 0, 2);
+            coy_set_uint(ctx, 1, 3);
+            coy_set_uint(ctx, 2, 1);
+            coy_set_uint(ctx, 3, 24);
+            ASSERT(coy_call(ctx, "main", "foo"));
+            ASSERT_EQ_INT(coy_get_uint(ctx, 0), 0);
+            break;
+        default:
+            ASSERT_TODO("codegen");
+        }
+        coyc_cg_free(cctx);
+    }
 }
 
 TEST(vm_basic)

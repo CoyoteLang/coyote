@@ -13,14 +13,12 @@ typedef struct {
     char *name;
 } decl_base_t;
 
-typedef enum {
-    return_
-} statement_type_t;
-
 typedef struct expression expression_t;
 
 typedef enum {
-    none, literal, identifier, parameter, expression,  
+    // TODO: splat literal -> int_literal, bool_literal, etc (saves memory,
+    // improves performance)
+    none, literal, identifier, parameter, expression, call,
 } expression_value_type_t;
 
 typedef union {
@@ -30,7 +28,9 @@ typedef union {
     } integer;
 } literal_t;
 
-typedef union {
+typedef union expression_value expression_value_t;
+
+union expression_value {
     expression_value_type_t type;
     struct {
         expression_value_type_t type; 
@@ -48,20 +48,38 @@ typedef union {
         expression_value_type_t type;
         size_t index;
     } parameter;
-} expression_value_t;
+    struct {
+        expression_value_type_t type;
+        char *name;
+        expression_value_t *arguments;
+    } call;
+};
+
+typedef enum {
+    OP_NONE, OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_CALL,
+} op_type_t;
 
 struct expression {
     struct coy_typeinfo_ type;
-    coyc_token_t op;
+    op_type_t op;
     expression_value_t lhs, rhs;
 };
+
+typedef enum {
+    // Return statement
+    return_,
+    // Raw expression - e.g. function call, discarded math (`3 + 4`), etc
+    expr,
+} statement_type_t;
+
+typedef struct block block_t;
 
 typedef union {
     statement_type_t type;
     struct {
         statement_type_t type;
         expression_t *value;
-    } return_;
+    } expr;
 } statement_t;
 
 typedef struct {
@@ -69,12 +87,17 @@ typedef struct {
     char *name;
 } parameter_t;
 
+struct block {
+    statement_t *statements;
+};
+
 typedef struct function {
     decl_base_t base;
     struct coy_typeinfo_ type;
     struct coy_typeinfo_ return_type;
-    statement_t *statements;
     parameter_t *parameters;
+    block_t *blocks;
+    block_t *active_block;
 } function_t;
 
 typedef struct import {

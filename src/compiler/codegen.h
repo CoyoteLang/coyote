@@ -8,7 +8,9 @@
 typedef struct {
     jmp_buf err_env;
     char *err_msg;
-    coy_module_t *module;
+    coy_env_t env;
+    struct coy_module_ *module;
+    struct coy_function_ *functions;
     function_t *func;
 } coyc_cctx_t;
 

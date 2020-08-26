@@ -103,13 +103,40 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx) {
         return val;
     }
     if (token.kind == COYC_TK_IDENT) {
-        expression_value_t val;
-        val.identifier.type = identifier;
-        val.identifier.name = coyc_token_read(token);
-        ctx->token_index += 1;
-        return val;
+        if (ctx->tokens[ctx->token_index + 1].kind == COYC_TK_LPAREN) {
+            // Function call
+            char *name = coyc_token_read(token);
+            fprintf(stderr, "Parsed call to function %s\n", name);
+            ctx->token_index += 2;
+            token = ctx->tokens[ctx->token_index];
+            expression_value_t value;
+            value.call.type = call;
+            value.call.name = name;
+            value.call.arguments = NULL;
+            if (token.kind != COYC_TK_RPAREN) do {
+                // TODO: have parse_expression return expression_values instead
+                expression_value_t arg_val;
+                arg_val.expression.type = expression;
+                arg_val.expression.expression = parse_expression(ctx, 1);
+                arrput(value.call.arguments, arg_val);
+            } while (ctx->tokens[ctx->token_index].kind == COYC_TK_COMMA);
+            if (ctx->tokens[ctx->token_index].kind != COYC_TK_RPAREN) {
+                ERROR("Exepected ')' to close function call!");
+            }
+            ctx->token_index += 1;
+            return value;
+        }
+        else {
+            expression_value_t val;
+            val.identifier.type = identifier;
+            val.identifier.name = coyc_token_read(token);
+            ctx->token_index += 1;
+            return val;
+        }
     }
-    COY_TODO("More atoms");
+    else {
+        COY_TODO("More atoms");
+    }
     // Not yet used.
 }
 
@@ -155,8 +182,8 @@ static void expr_reduce_val(coyc_pctx_t *ctx, expression_value_t *val) {
     }
 }
 
-static bool isComptime(coyc_token_kind_t op) {
-    return op == COYC_TK_OPMUL || op == COYC_TK_OPADD || op == COYC_TK_OPDIV || op == COYC_TK_OPSUB;
+static bool isComptime(op_type_t op) {
+    return op == OP_DIV || op == OP_ADD || op == OP_SUB || op == OP_MUL;
 }
 
 static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
@@ -166,21 +193,21 @@ static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
     if (expr->rhs.type == expression) {
         expr_reduce_val(ctx, &expr->rhs);
     }
-    if (expr->lhs.type == literal && expr->rhs.type == literal && isComptime(expr->op.kind)) {
-        switch (expr->op.kind) {
-            case COYC_TK_OPADD:
+    if (expr->lhs.type == literal && expr->rhs.type == literal && isComptime(expr->op)) {
+        switch (expr->op) {
+            case OP_ADD:
                 // TODO types
                 expr->lhs.literal.value.integer.value += expr->rhs.literal.value.integer.value;
                 break;
-            case COYC_TK_OPSUB:
+            case OP_SUB:
                 // TODO types
                 expr->lhs.literal.value.integer.value -= expr->rhs.literal.value.integer.value;
                 break;
-            case COYC_TK_OPMUL:
+            case OP_MUL:
                 // TODO types
                 expr->lhs.literal.value.integer.value *= expr->rhs.literal.value.integer.value;
                 break;
-            case COYC_TK_OPDIV:
+            case OP_DIV:
                 // TODO types
                 if (expr->rhs.literal.value.integer.value == 0) {
                     ERROR("Division by zero!");
@@ -196,13 +223,36 @@ static void reduce(coyc_pctx_t *ctx, expression_t *expr) {
         }
 }
 
+static op_type_t op_type_from(coyc_token_kind_t kind) {
+    switch (kind) {
+    case COYC_TK_OPADD:
+        return OP_ADD;
+    case COYC_TK_OPMUL:
+        return OP_MUL;
+    case COYC_TK_OPDIV:
+        return OP_DIV;
+    case COYC_TK_OPSUB:
+        return OP_SUB;
+    default:
+        return OP_NONE;
+    }
+}
+
+static bool is_unary(expression_value_type_t type) {
+    return type == call;
+}
+
 static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_prec) {
-    (void)minimum_prec;
     expression_t *expr = malloc(sizeof(expression_t));
     expr->lhs = compute_atom(ctx);
     expr->rhs.type = none;
-    // TODO
     expr->type.category = COY_TYPEINFO_CAT_INTERNAL_;
+    expr->op = OP_NONE;
+    if (is_unary(expr->lhs.type)) {
+        if (expr->lhs.type == call) {
+            expr->op = OP_CALL;
+        }
+    }
     while (true) {
         coyc_token_t token = ctx->tokens[ctx->token_index];
         if (token.kind == COYC_TK_SCOLON) {
@@ -221,7 +271,7 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
             expr->rhs.type = none;
             expr->type.category = COY_TYPEINFO_CAT_INTERNAL_;
         }
-        expr->op = token;
+        expr->op = op_type_from(token.kind);
         const int next_prec = op->assoc == left ? op->prec + 1 : op->prec;
         ctx->token_index += 1;
         expression_t *rhs = parse_expression(ctx, next_prec);
@@ -237,34 +287,47 @@ static expression_t *parse_expression(coyc_pctx_t *ctx, unsigned int minimum_pre
 // Returns true if there's no more instructions
 static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
 {
+    statement_t stmt;
     coyc_token_t token = ctx->tokens[ctx->token_index];
-    if (token.kind == COYC_TK_EOF) {
+    switch (token.kind) {
+    case COYC_TK_EOF:
         ERROR("Error: expected '}', found EOF!");
-    }
-    if (token.kind == COYC_TK_ERROR) {
+    case COYC_TK_ERROR:
         ERROR("Error in lexer while parsing function body!");
-    }
-    if (token.kind == COYC_TK_RBRACE) {
+    case COYC_TK_RBRACE:
         ctx->token_index += 1;
         return true;
-    }
-    if (token.kind == COYC_TK_RETURN) {
+    case COYC_TK_RETURN:
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
-        statement_t return_stmt;
-        return_stmt.return_.type = return_;
-        return_stmt.return_.value = parse_expression(ctx, 1);
-        if (ctx->tokens[ctx->token_index].kind == COYC_TK_SCOLON) {
+        stmt.expr.type = return_;
+        stmt.expr.value = parse_expression(ctx, 1);
+        token = ctx->tokens[ctx->token_index];
+        if (token.kind == COYC_TK_SCOLON) {
             ctx->token_index += 1;
         }
         else {
+            printf("Found %s\n", coyc_token_kind_tostr_DBG(token.kind));
             ERROR("Expected semicolon after return statement!");
         }
-        arrput(function->statements, return_stmt);
-    }
-    else {
+        break;
+    case COYC_TK_IDENT:
+        if (ctx->tokens[ctx->token_index + 1].kind == COYC_TK_LPAREN) {
+            stmt.expr.type = expr;
+            stmt.expr.value = parse_expression(ctx, 1);
+            if (ctx->tokens[ctx->token_index].kind != COYC_TK_SCOLON) {
+                ERROR("Expected semicolon after expression!");
+            }
+            ctx->token_index += 1;
+        }
+        else {
+            ERROR("TODO non-function-call pattern IDENT");
+        }
+        break;
+    default:
         errorf(ctx, "TODO parse statement %s", coyc_token_kind_tostr_DBG(token.kind));
     }
+    arrput(function->active_block->statements, stmt);
     return false;
 }
 
@@ -274,7 +337,11 @@ static void parse_function(coyc_pctx_t *ctx, struct coy_typeinfo_ return_type, c
     decl_t decl;
     decl.function.base.type = function;
     decl.function.base.name = ident;
-    decl.function.statements = NULL;
+    decl.function.active_block = NULL;
+    decl.function.blocks = NULL;
+    arraddn(decl.function.blocks, 1);
+    decl.function.blocks[0].statements = NULL;
+    decl.function.active_block = &decl.function.blocks[0];
     decl.function.parameters = NULL;
     decl.function.return_type = return_type;
     decl.function.type.category = COY_TYPEINFO_CAT_INTERNAL_;
@@ -325,7 +392,8 @@ static void parse_function(coyc_pctx_t *ctx, struct coy_typeinfo_ return_type, c
 static void parse_decl(coyc_pctx_t *ctx)
 {
     coyc_token_t token = ctx->tokens[ctx->token_index];
-    if (token.kind == COYC_TK_TYPE) {
+    switch (token.kind) {
+    case COYC_TK_TYPE:{
         const struct coy_typeinfo_ type = coyc_type(token);
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
@@ -344,11 +412,10 @@ static void parse_decl(coyc_pctx_t *ctx)
         else {
             errorf(ctx, "TODO parser TYPE %s", coyc_token_kind_tostr_DBG(token.kind));
         }
-    }
-    else if (token.kind == COYC_TK_MODULE) {
+        break;}
+    case COYC_TK_MODULE:
         ERROR("Duplicate module statement found!");
-    }
-    else {
+    default:
         errorf(ctx, "TODO parse %s", coyc_token_kind_tostr_DBG(token.kind));    
     }
 }
