@@ -45,7 +45,9 @@ static struct coy_typeinfo_ coyc_type(coyc_token_t token) {
         type.u.integer.width = 32;
     }
     if (type.category == COY_TYPEINFO_CAT_INTERNAL_) {
-        COY_TODO("parse more types");
+        char *tok = coyc_token_read(token);
+        printf("Parse type '%s'", tok);
+        __builtin_trap();
     }
     return type;
 }
