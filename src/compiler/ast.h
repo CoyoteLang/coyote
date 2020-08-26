@@ -70,6 +70,8 @@ typedef enum {
     return_,
     // Raw expression - e.g. function call, discarded math (`3 + 4`), etc
     expr,
+    // Conditional expression
+    conditional,
 } statement_type_t;
 
 typedef struct block block_t;
@@ -80,6 +82,12 @@ typedef union {
         statement_type_t type;
         expression_t *value;
     } expr;
+    struct {
+        statement_type_t type;
+        expression_t *condition;
+        /// Blocks owned by function_t
+        block_t *true_block, *false_block;
+    } conditional;
 } statement_t;
 
 typedef struct {

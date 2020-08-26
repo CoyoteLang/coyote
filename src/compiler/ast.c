@@ -146,11 +146,13 @@ typedef struct {
     enum {left,right} assoc;
 } op_t;
 
-op_t ops[4] = {
+op_t ops[6] = {
    { .token = COYC_TK_OPADD, .prec = 1, .assoc = left },
    { .token = COYC_TK_OPSUB, .prec = 1, .assoc = left },
    { .token = COYC_TK_OPDIV, .prec = 2, .assoc = left },
-   { .token = COYC_TK_OPMUL, .prec = 2, .assoc = left } 
+   { .token = COYC_TK_OPMUL, .prec = 2, .assoc = left },
+   { .token = COYC_TK_CMPLT, .prec = 3, .assoc = left },
+   { .token = COYC_TK_CMPGT, .prec = 3, .assoc = left },
 };
 
 static op_t *find_op(coyc_token_t token) {
@@ -311,6 +313,31 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
             ERROR("Expected semicolon after return statement!");
         }
         break;
+    case COYC_TK_IF:
+        if (ctx->tokens[ctx->token_index + 1].kind != COYC_TK_LPAREN) {
+            ERROR("Expected '(' after `if`!");
+        }
+        ctx->token_index += 2;
+        stmt.type = conditional;
+        stmt.conditional.condition = parse_expression(ctx, 1);
+        stmt.conditional.false_block = arraddnptr(function->blocks, 2);
+        stmt.conditional.true_block = stmt.conditional.false_block + 1;
+        stmt.conditional.false_block->statements = NULL;
+        stmt.conditional.true_block->statements = NULL;
+        if (ctx->tokens[ctx->token_index].kind != COYC_TK_RPAREN) {
+            ERROR("Expected ')' to close conditional expression!");
+        }
+        ctx->token_index += 1;
+        if (ctx->tokens[ctx->token_index].kind == COYC_TK_LBRACE) {
+            ERROR("Conditional blocks not implemented yet :P");
+        }
+        arrput(function->active_block->statements, stmt);
+        function->active_block = stmt.conditional.true_block;
+        if (parse_statement(ctx, function)) {
+            ERROR("Expected true-statement for conditional before '}'!");
+        }
+        function->active_block = stmt.conditional.false_block;
+        return false;
     case COYC_TK_IDENT:
         if (ctx->tokens[ctx->token_index + 1].kind == COYC_TK_LPAREN) {
             stmt.expr.type = expr;
@@ -496,18 +523,27 @@ void coyc_tree_free(coyc_pctx_t *ctx)
                 free(decl->base.name);
                 decl->base.name = NULL;
                 if (decl->base.type == function) {
-                    if (decl->function.statements) {
-                        for (int j = 0; j < arrlen(decl->function.statements); j += 1) {
-                            statement_t statement = decl->function.statements[j];
-                            switch (statement.type) {
-                            case return_:
-                                coyc_expr_free(statement.return_.value);
-                                break;
-                            default:
-                                COY_TODO("cleanup more statements");
+                    if (decl->function.blocks) {
+                        for (int j = 0; j < arrlen(decl->function.blocks); j += 1) {
+                            block_t block = decl->function.blocks[j];
+                            for (int k = 0; k < arrlen(block.statements); k += 1) {
+                                statement_t statement = block.statements[k];
+                                switch (statement.type) {
+                                case return_:
+                                case expr:
+                                    coyc_expr_free(statement.expr.value);
+                                    break;
+                                case conditional:
+                                    coyc_expr_free(statement.conditional.condition);
+                                    // The true and false blocks are owned by the function; don't clean them here.
+                                    break;
+                                default:
+                                    COY_TODO("cleanup more statements");
+                                }
                             }
+                            arrfree(block.statements);
                         }
-                        arrfree(decl->function.statements);
+                        arrfree(decl->function.blocks);
                     }
                     for (int j = 0; j < arrlen(decl->function.parameters); j += 1) {
                         parameter_t p = decl->function.parameters[j];
