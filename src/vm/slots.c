@@ -46,11 +46,23 @@ size_t coy_slots_getlen_(struct coy_slots_* slots)
     return stbds_arrlenu(slots->regs);
 }
 
-union coy_register_ coy_slots_get_(struct coy_slots_* slots, size_t i, bool* isptr)
+union coy_register_* coy_slots_getp_(struct coy_slots_* slots, size_t i, bool* isptr)
 {
     COY_CHECK(i < coy_slots_getlen_(slots));
     if(isptr) *isptr = coy_bitarray_get(&slots->pregs, i);
-    return slots->regs[i];
+    return &slots->regs[i];
+}
+union coy_register_* coy_slots_getvalp_(struct coy_slots_* slots, size_t i)
+{
+    bool isptr;
+    union coy_register_* reg = coy_slots_getp_(slots, i, &isptr);
+    COY_CHECK_MSG(!isptr, "expected a non-pointer value");
+    return reg;
+}
+
+union coy_register_ coy_slots_get_(struct coy_slots_* slots, size_t i, bool* isptr)
+{
+    return *coy_slots_getp_(slots, i, isptr);
 }
 union coy_register_ coy_slots_getval_(struct coy_slots_* slots, size_t i)
 {

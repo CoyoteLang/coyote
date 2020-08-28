@@ -291,6 +291,22 @@ TEST(typeinfo_integer)
     coy_env_deinit(&env);
 }
 
+TEST(typeinfo_tensor)
+{
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_int_tensor = coy_typeinfo_tensor_(&env, ti_int, (const uint32_t[]){3}, 1);
+
+    ASSERT_EQ_STR(ti_int_tensor->repr, "int#3");
+    ASSERT_EQ_STR(coy_typeinfo_tensor_(&env, ti_int, (const uint32_t[]){3,2}, 2)->repr, "int#[3,2]");
+    ASSERT_EQ_STR(coy_typeinfo_tensor_(&env, ti_int, (const uint32_t[]){5,5,2}, 3)->repr, "int#[5,5,2]");
+    ASSERT_EQ_STR(coy_typeinfo_tensor_(&env, ti_int_tensor, (const uint32_t[]){1,2,3,4}, 4)->repr, "int#[3,1,2,3,4]");
+
+    coy_env_deinit(&env);
+}
+
 TEST(typeinfo_array)
 {
     coy_env_t env;
@@ -728,6 +744,90 @@ TEST(vm_native_call_direct)
     coy_env_deinit(&env);
 }
 
+TEST(vm_vector2_add)
+{
+    coy_env_t env;
+    PRECONDITION(coy_env_init(&env));
+
+    struct coy_typeinfo_* ti_int = coy_typeinfo_integer_(&env, 32, true);
+    struct coy_typeinfo_* ti_int2 = coy_typeinfo_tensor_(&env, ti_int, (const uint32_t[]){2}, 1);
+    struct coy_typeinfo_* ti_function_int2_int2_int2 = coy_typeinfo_function_(&env, ti_int2, (const struct coy_typeinfo_*[]){ti_int2, ti_int2}, 2);
+
+    struct coy_typeinfo_* ti_uint = coy_typeinfo_integer_(&env, 32, false);
+    struct coy_typeinfo_* ti_uint2 = coy_typeinfo_tensor_(&env, ti_uint, (const uint32_t[]){2}, 1);
+    struct coy_typeinfo_* ti_function_uint2_uint2_uint2 = coy_typeinfo_function_(&env, ti_uint2, (const struct coy_typeinfo_*[]){ti_uint2, ti_uint2}, 2);
+
+    struct coy_module_* module = coy_module_create_(&env, "main", false);
+
+    struct coy_function_builder_ builder;
+
+    PRECONDITION(coy_function_builder_init_(&builder, ti_function_int2_int2_int2, 0));
+    struct coy_function_ func_add_int2;
+    {
+        coy_function_builder_block_(&builder, 2, NULL, 0);
+        {
+            // this one could be a tail call, but we want to test normal calls, too
+            uint32_t add = coy_function_builder_op_(&builder, COY_OPCODE_ADD, COY_OPFLG_TYPE_INT32X2_TEMP, false);
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_reg_(&builder, 1);
+            coy_function_builder_op_(&builder, COY_OPCODE_RET, 0, false);
+                coy_function_builder_arg_reg_(&builder, add);
+        }
+
+        coy_function_builder_finish_(&builder, &func_add_int2);
+        coy_module_inject_function_(module, "add_int2", &func_add_int2);
+    }
+
+    PRECONDITION(coy_function_builder_init_(&builder, ti_function_uint2_uint2_uint2, 0));
+    struct coy_function_ func_add_uint2;
+    {
+        coy_function_builder_block_(&builder, 2, NULL, 0);
+        {
+            // this one could be a tail call, but we want to test normal calls, too
+            uint32_t add = coy_function_builder_op_(&builder, COY_OPCODE_ADD, COY_OPFLG_TYPE_UINT32X2_TEMP, false);
+                coy_function_builder_arg_reg_(&builder, 0);
+                coy_function_builder_arg_reg_(&builder, 1);
+            coy_function_builder_op_(&builder, COY_OPCODE_RET, 0, false);
+                coy_function_builder_arg_reg_(&builder, add);
+        }
+
+        coy_function_builder_finish_(&builder, &func_add_uint2);
+        coy_module_inject_function_(module, "add_uint2", &func_add_uint2);
+    }
+    PRECONDITION(coy_module_link_(module));
+
+    ASSERT(coy_function_verify_(&func_add_int2));
+    ASSERT(coy_function_verify_(&func_add_uint2));
+
+    coy_context_t* ctx = coy_context_create(&env);
+
+    size_t vsize;
+
+    const int32_t* vint;
+    coy_ensure_slots(ctx, 2);
+    coy_set_uint_vector(ctx, 0, (const uint32_t[]){5, 7}, 2);
+    coy_set_uint_vector(ctx, 1, (const uint32_t[]){10, 12}, 2);
+    ASSERT(coy_call(ctx, "main", "add_int2"));
+    vint = (const int32_t*)coy_get_uint_vector(ctx, 0, &vsize);
+    ASSERT(vint);
+    ASSERT_EQ_INT(vsize, 2);
+    ASSERT_EQ_INT(vint[0], 15);
+    ASSERT_EQ_INT(vint[1], 19);
+
+    const uint32_t* vuint;
+    coy_ensure_slots(ctx, 2);
+    coy_set_uint_vector(ctx, 0, (const uint32_t[]){5, 7}, 2);
+    coy_set_uint_vector(ctx, 1, (const uint32_t[]){10, 12}, 2);
+    ASSERT(coy_call(ctx, "main", "add_uint2"));
+    vuint = coy_get_uint_vector(ctx, 0, &vsize);
+    ASSERT(vuint);
+    ASSERT_EQ_INT(vsize, 2);
+    ASSERT_EQ_INT(vuint[0], 15);
+    ASSERT_EQ_INT(vuint[1], 19);
+
+    coy_env_deinit(&env);
+}
+
 int main()
 {
     TEST_EXEC(stb_ds);
@@ -735,6 +835,7 @@ int main()
     TEST_EXEC(parser);
     TEST_EXEC(semantic_analysis);
     TEST_EXEC(typeinfo_integer);
+    TEST_EXEC(typeinfo_tensor);
     TEST_EXEC(typeinfo_array);
     TEST_EXEC(typeinfo_function);
     TEST_EXEC(typeinfo_intern_dedup);
@@ -746,5 +847,6 @@ int main()
     TEST_EXEC(vm_native_call);
     TEST_EXEC(vm_native_retcall);
     TEST_EXEC(vm_native_call_direct);
+    TEST_EXEC(vm_vector2_add);
     return TEST_REPORT();
 }

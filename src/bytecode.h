@@ -84,7 +84,9 @@ static const char* const coy_instruction_opcode_names_[256] = {
 #define COY_OPFLG_TYPE_INT32    (COY_OPFLG_SIGNED | COY_OPFLG_32BIT)
 #define COY_OPFLG_TYPE_UINT32   (COY_OPFLG_UNSIGNED | COY_OPFLG_32BIT)
 
-#define COY_OPFLG_TYPE_MASK     (0xC0 | 0x30)
+#define COY_OPFLG_TYPE_INT32X2_TEMP     (COY_OPFLG_SIGNED | 0x04)
+#define COY_OPFLG_TYPE_UINT32X2_TEMP    (COY_OPFLG_UNSIGNED | 0x04)
+#define COY_OPFLG_TYPE_MASK     (0xC0 | 0x30 | /*temp*/ 0x04)
 
 // used in JMP
 #define COY_OPFLG_CMP_EQ    0x00

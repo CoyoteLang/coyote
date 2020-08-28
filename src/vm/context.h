@@ -37,6 +37,9 @@ int32_t coy_normalize_index(coy_context_t* ctx, int32_t index);
 uint32_t coy_get_uint(coy_context_t* ctx, int32_t index);
 void coy_set_uint(coy_context_t* ctx, int32_t index, uint32_t value);
 
+const uint32_t* coy_get_uint_vector(coy_context_t* ctx, int32_t index, size_t* size);
+void coy_set_uint_vector(coy_context_t* ctx, int32_t index, const uint32_t* vector, size_t size);
+
 bool coy_call(coy_context_t* ctx, const char* module_name, const char* function_name);
 
 #endif /* COY_VM_CONTEXT_H_ */

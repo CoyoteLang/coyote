@@ -15,6 +15,7 @@ enum coy_typeinfo_category_
     COY_TYPEINFO_CAT_INTERNAL_,  //< should never, ever show up in user code
     COY_TYPEINFO_CAT_NORETURN_,
     COY_TYPEINFO_CAT_INTEGER_,
+    COY_TYPEINFO_CAT_TENSOR_,
     COY_TYPEINFO_CAT_ARRAY_,
     //COY_TYPEINFO_CAT_SET_,
     //COY_TYPEINFO_CAT_ASSOC_ARRAY_,
@@ -33,6 +34,12 @@ struct coy_typeinfo_
             bool is_signed;
             uint8_t width;
         } integer;
+        struct
+        {
+            const struct coy_typeinfo_* basetype;
+            const uint32_t* sizes;
+            uint32_t ndims;
+        } tensor;
         struct
         {
             const struct coy_typeinfo_* basetype;
@@ -59,6 +66,7 @@ coy_type_eql_(struct coy_typeinfo_ a, struct coy_typeinfo_ b);
 
 struct coy_typeinfo_* coy_typeinfo_noreturn_(struct coy_env* env);
 struct coy_typeinfo_* coy_typeinfo_integer_(struct coy_env* env, uint8_t width, bool is_signed);
+struct coy_typeinfo_* coy_typeinfo_tensor_(struct coy_env* env, const struct coy_typeinfo_* basetype, const uint32_t* sizes, uint32_t ndims);
 struct coy_typeinfo_* coy_typeinfo_array_(struct coy_env* env, const struct coy_typeinfo_* basetype, uint32_t ndims);
 struct coy_typeinfo_* coy_typeinfo_function_(struct coy_env* env, const struct coy_typeinfo_* rtype, const struct coy_typeinfo_* const* ptypes, size_t nparams);
 

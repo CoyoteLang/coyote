@@ -51,6 +51,11 @@ static bool coy_op_handle_add_(coy_context_t* ctx, struct coy_stack_segment_* se
     case COY_OPFLG_TYPE_UINT32:
         dst.u32 = a.u32 + b.u32;
         break;
+    case COY_OPFLG_TYPE_INT32X2_TEMP:
+    case COY_OPFLG_TYPE_UINT32X2_TEMP:
+        dst.temp.u32x2[0] = a.temp.u32x2[0] + b.temp.u32x2[0];
+        dst.temp.u32x2[1] = a.temp.u32x2[1] + b.temp.u32x2[1];
+        break;
     default:
         COY_CHECK_MSG(false, "invalid instruction");
     }
@@ -69,11 +74,37 @@ static bool coy_op_handle_sub_(coy_context_t* ctx, struct coy_stack_segment_* se
     case COY_OPFLG_TYPE_UINT32:
         dst.u32 = a.u32 - b.u32;
         break;
+    case COY_OPFLG_TYPE_INT32X2_TEMP:
+    case COY_OPFLG_TYPE_UINT32X2_TEMP:
+        dst.temp.u32x2[0] = a.temp.u32x2[0] - b.temp.u32x2[0];
+        dst.temp.u32x2[1] = a.temp.u32x2[1] - b.temp.u32x2[1];
+        break;
     default:
         COY_CHECK_MSG(false, "invalid instruction");
     }
     coy_slots_setval_(&seg->slots, dstreg, dst);
     return true;
+}
+static int32_t coy_mul_i32_i32_(int32_t a, int32_t b)
+{
+    // we do unsigned multiplication to avoid C undefined behavior
+    bool negresult = (a < 0) != (b < 0);
+    uint32_t ua = a;
+    uint32_t ub = b;
+    if(ua >> 31) ua = -ua;
+    if(ub >> 31) ub = -ub;
+    uint32_t d = ua * ub;
+    return negresult ? -d : d;
+}
+static int32_t coy_div_i32_i32(int32_t a, int32_t b)
+{
+    COY_TODO("division of int");
+    return 0;
+}
+static int32_t coy_rem_i32_i32(int32_t a, int32_t b)
+{
+    COY_TODO("remainder of int");
+    return 0;
 }
 static bool coy_op_handle_mul_(coy_context_t* ctx, struct coy_stack_segment_* seg, struct coy_stack_frame_* frame, const union coy_instruction_* instr, uint32_t dstreg)
 {
@@ -81,22 +112,21 @@ static bool coy_op_handle_mul_(coy_context_t* ctx, struct coy_stack_segment_* se
     union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
     union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
     union coy_register_ dst;
-    bool negresult;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
-        // we do unsigned multiplication to avoid C undefined behavior
-        negresult = (a.i32 < 0) != (b.i32 < 0);
-        a.u32 = a.i32;  //< to ensure proper conversion
-        if(a.u32 >> 31) a.u32 = -a.u32;
-        b.u32 = b.i32;  //< to ensure proper conversion
-        if(b.u32 >> 31) b.u32 = -b.u32;
-        dst.u32 = a.u32 * b.u32;
-        if(negresult)
-            dst.u32 = -dst.u32;
+        dst.i32 = coy_mul_i32_i32_(a.i32, b.i32);
         break;
     case COY_OPFLG_TYPE_UINT32:
         dst.u32 = a.u32 * b.u32;
+        break;
+    case COY_OPFLG_TYPE_INT32X2_TEMP:
+        dst.temp.i32x2[0] = coy_mul_i32_i32_(a.temp.i32x2[0], b.temp.i32x2[0]);
+        dst.temp.i32x2[1] = coy_mul_i32_i32_(a.temp.i32x2[1], b.temp.i32x2[1]);
+        break;
+    case COY_OPFLG_TYPE_UINT32X2_TEMP:
+        dst.temp.u32x2[0] = a.temp.u32x2[0] * b.temp.u32x2[0];
+        dst.temp.u32x2[1] = a.temp.u32x2[1] * b.temp.u32x2[1];
         break;
     default:
         COY_CHECK_MSG(false, "invalid instruction");
@@ -113,11 +143,26 @@ static bool coy_op_handle_div_(coy_context_t* ctx, struct coy_stack_segment_* se
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
-        COY_TODO("division of `int`");
+        if(!b.i32)
+            COY_TODO("handling division by 0");
+        dst.i32 = coy_div_i32_i32(a.i32, b.i32);
+        break;
     case COY_OPFLG_TYPE_UINT32:
         if(!b.u32)
             COY_TODO("handling division by 0");
         dst.u32 = a.u32 / b.u32;
+        break;
+    case COY_OPFLG_TYPE_INT32X2_TEMP:
+        if(!b.temp.i32x2[0] || !b.temp.i32x2[1])
+            COY_TODO("handling division by 0");
+        dst.temp.u32x2[0] = coy_div_i32_i32(a.temp.u32x2[0], b.temp.u32x2[0]);
+        dst.temp.u32x2[1] = coy_div_i32_i32(a.temp.u32x2[1], b.temp.u32x2[1]);
+        break;
+    case COY_OPFLG_TYPE_UINT32X2_TEMP:
+        if(!b.temp.u32x2[0] || !b.temp.u32x2[1])
+            COY_TODO("handling division by 0");
+        dst.temp.u32x2[0] = a.temp.u32x2[0] / b.temp.u32x2[0];
+        dst.temp.u32x2[1] = a.temp.u32x2[1] / b.temp.u32x2[1];
         break;
     default:
         COY_CHECK_MSG(false, "invalid instruction");
@@ -134,11 +179,26 @@ static bool coy_op_handle_rem_(coy_context_t* ctx, struct coy_stack_segment_* se
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
-        COY_TODO("remainder of `int`");
+        if(!b.i32)
+            COY_TODO("handling remainder by 0");
+        dst.i32 = coy_rem_i32_i32(a.i32, b.i32);
+        break;
     case COY_OPFLG_TYPE_UINT32:
         if(!b.u32)
             COY_TODO("handling remainder by 0");
         dst.u32 = a.u32 % b.u32;
+        break;
+    case COY_OPFLG_TYPE_INT32X2_TEMP:
+        if(!b.temp.i32x2[0] || !b.temp.i32x2[1])
+            COY_TODO("handling remainder by 0");
+        dst.temp.u32x2[0] = coy_rem_i32_i32(a.temp.u32x2[0], b.temp.u32x2[0]);
+        dst.temp.u32x2[1] = coy_rem_i32_i32(a.temp.u32x2[1], b.temp.u32x2[1]);
+        break;
+    case COY_OPFLG_TYPE_UINT32X2_TEMP:
+        if(!b.temp.u32x2[0] || !b.temp.u32x2[1])
+            COY_TODO("handling remainder by 0");
+        dst.temp.u32x2[0] = a.temp.u32x2[0] % b.temp.u32x2[0];
+        dst.temp.u32x2[1] = a.temp.u32x2[1] % b.temp.u32x2[1];
         break;
     default:
         COY_CHECK_MSG(false, "invalid instruction");
@@ -173,16 +233,24 @@ static bool coy_op_handle_jmpc_(coy_context_t* ctx, struct coy_stack_segment_* s
     COY_CHECK(instr->op.nargs >= 5);
     union coy_register_ a = coy_op_getreg_(seg, frame, instr[1], NULL);
     union coy_register_ b = coy_op_getreg_(seg, frame, instr[2], NULL);
-    bool testeq, testlt;
+    bool testeq, testlt, haslt;
     switch(instr->op.flags & COY_OPFLG_TYPE_MASK)
     {
     case COY_OPFLG_TYPE_INT32:
         testeq = a.i32 == b.i32;
         testlt = a.i32 < b.i32;
+        haslt = true;
         break;
     case COY_OPFLG_TYPE_UINT32:
         testeq = a.u32 == b.u32;
         testlt = a.u32 < b.u32;
+        haslt = true;
+        break;
+    case COY_OPFLG_TYPE_INT32X2_TEMP:
+    case COY_OPFLG_TYPE_UINT32X2_TEMP:
+        testeq = !memcmp(a.temp.u32x2, b.temp.u32x2, sizeof(a.temp.u32x2));
+        testlt = false;
+        haslt = false;
         break;
     default:
         testeq = testlt = false;
@@ -193,8 +261,8 @@ static bool coy_op_handle_jmpc_(coy_context_t* ctx, struct coy_stack_segment_* s
     {
     case COY_OPFLG_CMP_EQ: test = testeq; break;
     case COY_OPFLG_CMP_NE: test = !testeq; break;
-    case COY_OPFLG_CMP_LE: test = testlt || testeq; break;
-    case COY_OPFLG_CMP_LT: test = testlt; break;
+    case COY_OPFLG_CMP_LE: COY_CHECK_MSG(haslt, "`<=` test is not supported for this type"); test = testlt || testeq; break;
+    case COY_OPFLG_CMP_LT: COY_CHECK_MSG(haslt, "`<` test is not supported for this type"); test = testlt; break;
     default:
         test = false;
         COY_UNREACHABLE();

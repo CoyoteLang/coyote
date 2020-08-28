@@ -13,6 +13,12 @@ union coy_register_
     float f32;
     double f64;
     void* ptr;
+    // temporary
+    struct
+    {
+        int32_t i32x2[2];
+        uint32_t u32x2[2];
+    } temp;
 };
 
 #endif /* COY_REGISTER_H_ */

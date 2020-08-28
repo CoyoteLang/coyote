@@ -18,6 +18,9 @@ void coy_slots_gc_mark_(struct coy_slots_* slots, struct coy_gc_* gc);
 void coy_slots_setlen_(struct coy_slots_* slots, size_t nlen);
 size_t coy_slots_getlen_(struct coy_slots_* slots);
 
+union coy_register_* coy_slots_getp_(struct coy_slots_* slots, size_t i, bool* isptr);
+union coy_register_* coy_slots_getvalp_(struct coy_slots_* slots, size_t i);
+
 union coy_register_ coy_slots_get_(struct coy_slots_* slots, size_t i, bool* isptr);
 union coy_register_ coy_slots_getval_(struct coy_slots_* slots, size_t i);
 void* coy_slots_getptr_(struct coy_slots_* slots, size_t i);

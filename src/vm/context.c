@@ -103,6 +103,28 @@ void coy_set_uint(coy_context_t* ctx, int32_t index, uint32_t value)
     coy_slots_setval_(&ctx->slots, coy_normalize_index(ctx, index), (union coy_register_){.u32=value});
 }
 
+const uint32_t* coy_get_uint_vector(coy_context_t* ctx, int32_t index, size_t* size)
+{
+    if(size) *size = 2;
+    return coy_slots_getvalp_(&ctx->slots, coy_normalize_index(ctx, index))->temp.u32x2;
+}
+void coy_set_uint_vector(coy_context_t* ctx, int32_t index, const uint32_t* vector, size_t size)
+{
+    if(!COY_ENSURE(size, "misuse: cannot set uint vector of size 0"))
+        return;
+    if(size > 2)
+        COY_TODO("set vector size > 2");
+    union coy_register_ reg;
+    if(size == 1)
+        reg.u32 = vector[0];
+    else
+    {
+        COY_ASSERT(size == 2);
+        memcpy(reg.temp.u32x2, vector, size * sizeof(*vector));
+    }
+    coy_slots_setval_(&ctx->slots, coy_normalize_index(ctx, index), reg);
+}
+
 bool coy_call(coy_context_t* ctx, const char* module_name, const char* function_name)
 {
 #if 0
