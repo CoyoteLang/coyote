@@ -400,7 +400,7 @@ CREDITS
 #define arrfree     stbds_arrfree
 #define arraddn     stbds_arraddn // deprecated, use one of the following instead:
 #define arraddnptr  stbds_arraddnptr
-#define arraddnindex stbds_arraddnindex
+#define arraddnindex stbds_arraddnoff
 #define arrsetlen   stbds_arrsetlen
 #define arrlast     stbds_arrlast
 #define arrins      stbds_arrins
