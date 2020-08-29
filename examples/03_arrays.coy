@@ -92,10 +92,10 @@ void main()
 
         // arithmetic is implicit (i.e. without `v[]`) for vectors
         assert(v * 2 == int#(26, 40));
-        // vectors can simply be nested in order to create a longer one
+        // vector constructors support other vectors; the length of the result is the sum of lengths of arguments
         assert(int#(1, v, 4) == int#(1, 13, 20, 4));
 
-        // create 3x2 a matrix (2D tensor)
+        // create 3x2 a matrix (2D tensor); syntax TBD
         int#[3,2] m = int#(int#(1, 2, 3), int#(4, 5, 6));
     }
 }

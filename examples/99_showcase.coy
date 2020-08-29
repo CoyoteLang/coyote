@@ -15,11 +15,54 @@ import std.io: tty;
 
 
 
+/********** OPERATORS **********/
+/*
+    Most of the C portfolio of operators is available (some, such as pointer dereferencing, are obviously missing), though Coyote adds a few of its own.
+*/
+unittest(operators)
+{
+    // concatenation
+    assert([1, 2] ~ [3, 4] == [1, 2, 3, 4]);
+    assert("hello" ~ ", world" == "hello, world");
+    // appending
+    string a = "fizz";
+    a ~= "buzz";
+    assert(a == "fizzbuzz");
+
+    // comparison operators can be chained, and they work in the expected mathematical manner; for example, this checks whether `3` is between 0 and 10:
+    assert(0 <= 3 <= 10);
+    // above is equivalent to the following (except that each value is only evaluated up to once):
+    assert(0 <= 3 && 3 <= 10);
+    // chaining can combine various operators:
+    assert(3 >= 0 == -0 > -3 != 30);
+
+    // the so-called "spaceship operator" is supported:
+    assert(("abc" <=> "def") < 0);
+    assert((1.75 <=> 0.25) > 0);
+    assert((30 <=> 30) == 0);
+
+    // there are a number of operators supported for option types; see "OPTION TYPES" below
+    // a!
+    // a?.b
+    // a??b
+    // (a!.b exists, but is not an operator: it is simply the combination `(a!).y`)
+
+    // `try` and `throw` are operators, to support patterns such as:
+    // (commented out to avoid errors in unit test)
+    //string? text = try readFile("foo.txt");
+    //uint x = x > 0 ? x - 1 : throw DomainError("x must be positive");
+    // TBD: `return` might also be converted to an operator, for the same reason
+}
+
+
+
 /********** OPTION TYPES **********/
 /*
     Option types in Coyote are special in that they can hold an error value, instead
     of a simple `null`.
     The value of `null` still exists (at least in the current design), though it is nothing more than a specific type of an error.
+
+    Note that nothing, even by-reference types such as classes, is nullable by default (with the sole exception of the top type). One must use `T?`, not `T`.
 
     The exact error handling is still TBD, so consider the examples a proposal. In particular, keywords are very likely to change, though some other changes are quite possible.
 */
@@ -132,6 +175,8 @@ unittest(traits)
 /*
     Classes are passed by reference (same as in most languages). Whether inheritance
     is going to be supported at all is as of yet TBD.
+
+    Note that even these are *not* nullable by default. I.e. use `Foo?` not `Foo`.
 */
 class Foo: Serializable
 {
@@ -279,4 +324,158 @@ unittest(enums)
     case Null: tty.stdout.println("found null"); break;
     // this is not a `final` switch, so other cases are simply ignored
     }
+}
+
+
+
+/********** ARRAYS **********/
+/*
+    All arrays in Coyote are dynamic. Multidimensional arrays exist, and uniquely, Coyote will support reshaping to and from single-dimensional arrays.
+
+    Vector operations are also supported on arrays.
+*/
+unittest(arrays_simple)
+{
+    // normal array
+    int[] a = [1, 2, 3, 4, 5];
+    // resizing
+    a.length = 2;
+    assert(a == [1, 2]);
+
+    // appending
+    a ~= 3;
+    assert(a == [1, 2, 3]);
+
+    // concatenation
+    assert(a ~ [40, 50] == [1, 2, 3, 40, 50]);
+
+    // arrays are merely views of data; this means that slicing does *not* copy:
+    int[] aSlice = a[0..2];
+    assert(aSlice == [1, 2]);
+    aSlice[0] = 99;
+    assert(a == [99, 2, 3]);
+    // an explicit (shallow) copy may be created with the `.dup` property:
+    int[] aCopy = a.dup;
+    a[0] = 1;
+    aCopy[0] = 50;
+    assert(a == [1, 2, 3]);
+    assert(aCopy == [50, 2, 3]);
+
+    // `$` is a shorthand for the length in the current dimension
+    assert(a == a[] == a[0..$]);
+    // `$n` is a shorthand for the length of the nth dimension
+    assert(a[$-1] == a[$0-1] == a[a.dim[0]-1]);
+
+    // vector operations are supported (requested explicitly via slicing syntax)
+    int[] b = a[] * a[];
+    assert(b == [1, 4, 9]);
+    // broadcasting
+    b = a[] + 2;
+    assert(b == [3, 4, 5]);
+
+    // (feature TBD) immutable array
+    int[!] c = [1, 2, 3];
+    //c[0] = 4;   // compile-time error
+    // if immutable arrays are provided, they will most likely be used for strings (`string` will become an alias for `char[!]`)
+}
+unittest(arrays_multidimensonal)
+{
+    // multidimensional arrays are supported, and can be reshaped from and to 1D arrays:
+    int[,] a = [1, 2, 3; 4, 5, 6];    // note: literal syntax TBD
+    // `length` is the total length of an array in memory; it is read-only, except for 1D arrays
+    assert(a.length == 6);
+    // `dim` is the per-dimension length of an array; it is read-write
+    assert(a.dim == [2, 3]);
+
+    // `a.flat` is a conveniency wrapper for `bitcast(int[])a`
+    int[] b = a.flat;
+    // since arrays are views, this also modifies `a`:
+    b[2] = 33;
+    assert(a == [1, 2, 33; 4, 5, 6]);
+
+    // syntax for converting a 1D array to N-D is planned, but TBD
+    //int[,] aAgain = bitcast(int[2,3])b;   // (this probably won't quite work, but demonstrates the idea)
+    //assert(a == aAgain);
+}
+
+
+
+/********** TENSORS **********/
+/*
+    Unlike most other languages, Coyote will support actual, mathematical tensors.
+    The exact details are as of yet TBD (for example, there is a possibility that only vectors & matrices will be supported, and not general tensors).
+
+    The rationale for vectors (1-dimension tensors) is that many libraries tend to invent their own, since languages do not support them; this is a common enough requirement that it makes sense to simply have them builtin.
+
+    Support for matrices (2-dimension tensors) is motivated by a desire to support game development easily. General tensor supprot is merely a generalization of this idea to an arbitrary number of dimensions.
+*/
+unittest(tensors)
+{
+    // create a vector (1D tensor)
+    int#2 v = int#2(10, 20);    // int#2 is syntactic sugar for int#[2]
+    v.x += 3;
+    assert(v == int#(13, 20));  // int#(...) syntactic sugar for int#[N](...) with appropriate N
+
+    // arithmetic is implicit (i.e. without `v[]`) for vectors
+    assert(v * 2 == int#(26, 40));
+    // vector constructors support other vectors; the length of the result is the sum of lengths of arguments
+    assert(int#(1, v, 4) == int#(1, 13, 20, 4));
+
+    // due to common use of name-based access, and inspired by GLSL, vectors up to size of 4 have support for such, as well as for "swizzling":
+    // (n.b.: this may be implemented via a set of extension methods)
+    assert(v.x == v[0]);
+    assert(v.xxw == int#(v[0], v[0], v[3]));
+    assert(v.xyzw == v.rgba == v.stpq);
+    // swizzling can also be used in assignments:
+    assert(v == int#(1, 13, 20, 4));
+    v.yx = v.xy;
+    assert(v == int#(13, 1, 20, 4));
+    v.xyzw = v.yyyy;
+    assert(v == int#(1, 1, 1, 1));
+
+    // create 3x2 a matrix (2D tensor); syntax TBD
+    int#[3,2] m = int#(int#(1, 2, 3), int#(4, 5, 6));
+}
+
+
+
+/********** GENERICS **********/
+/*
+    No example yet: Details are as of yet TBD, though some sort of support for generics will have to be provided due to the statically-typed nature of the language.
+
+    Therefore, what follows is merely a proposal.
+
+    The syntax is most likely going to be e.g. `Array$int` (which is shorthand for `Array$(int)`).
+    The popular syntax of `Array<int>` has been avoided due to ambiguity problems with the `>>` and `>>>` operators.
+*/
+// type example:
+class LinkedList$T
+{
+    class Node
+    {
+        Node? prev, next;
+        T value;
+    }
+    Node? head, tail;
+    //...
+}
+// function example:
+void swap$T(ref T a, ref T b)
+{
+    T tmp = a;
+    a = b;
+    b = tmp;
+}
+
+unittest(generics)
+{
+    var a = new LinkedList$int;
+    a ~= 3;
+    a ~= 4;
+    a ~= 5;
+
+    var b = 3;
+    var c = 4;
+    swap(ref b, ref c);
+    assert(b == 4 && c == 3);
 }
