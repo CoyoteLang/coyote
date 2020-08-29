@@ -1,0 +1,101 @@
+import std.io;
+
+void main()
+{
+    // arrays
+    {
+        int[] a = [1, 2, 3];
+        a.length = 5;
+        assert(a == [1, 2, 3, 0, 0]);
+        a ~= 10;    // append `10`
+        assert(a == [1, 2, 3, 0, 0, 10]);
+        assert(a.dim[0] == a.length);   // always true for 1-dimensional arrays (but see multidimensional below)
+        a.length = 3;
+        assert(a == [1, 2, 3]);
+
+        // slicing is supported
+        assert(a[0..2] == [1, 2]);
+        assert(a[2..$] == [3]); // `$` is shorthand for `dim[current_index]`
+        // so is concatenation
+        assert(a ~ [4, 5] == [1, 2, 3, 4, 5]);
+        // for numeric types, arithmetic is available
+        assert(a[] + 3 == [4, 5, 6]);
+        assert(a[0..2] * a[1..$] == [2, 6]);    // [a[0]*a[1], a[1]*a[2]]
+
+        // creating a shallow copy of an array
+        int[] acpy = a.dup;
+        acpy[0] == 4;
+        assert(acpy == [4, 2, 3]);
+        assert(a == [1, 2, 3]);
+    }
+
+    // immutable arrays (feature TBD)
+    {
+        int[!] aimm = [1, 2, 3];
+        //aimm[0] = 4;    // error
+        int[] amut = aimm.dup;  // create a mutable (shallow) copy
+        amut[0] = 4;    // OK
+        aimm = amut.idup;   // create an immutable (shallow) copy
+        assert(aimm == [4, 2, 3]);
+
+        // if the feature is indeed introduced, then strings are likely to end up being simple `char[!]` arrays
+    }
+
+    // multidimensional arrays (literal syntax TBD)
+    {
+        int[,] c = [1, 2; 3, 4; 5, 6];
+        assert(c.length == 6);
+        assert(c.dim == [3, 2]);    // 3x2
+        c.dim[0] = 2;
+        assert(c == [1, 2; 3, 4]);
+
+        // multidimensional arrays can be reshaped (limitations of feature TBD)
+        int[] c1 = bitcast(int[])c; // this particular use-case is also available as c.flat (name TBD)
+        assert(c1 == [1, 2, 3, 4]);
+        c1[1] = 5;
+        assert(c[0,1] == 5);    // reshaping merely creates a new *view*
+    }
+
+    // jagged arrays are simply arrays of arrays; there are no special semantics
+    {
+        int[][] b = [[1, 2], [3, 4, 5]];
+        assert(b.length == 2);
+        assert(b[1].length == 3);
+    }
+
+    // associative arrays (a.k.a. dictionaries/tables/maps)
+    {
+        // string => int mapping
+        int[string] d = ["foo": 3, "bar": 4];
+        assert(d.length == 2);
+        assert(d["bar"] == 4);
+        assert("foo" in d);
+        assert("xyz" !in d);
+    }
+
+    // sets (feature & syntax TBD)
+    {
+        void[string] e = ["foo", "bar"];
+        assert(e.length == 2);
+        assert("foo" in e);
+        assert("xyz" !in e);
+    }
+
+    // tensors are fixed-size arrays of numeric types that are passed by value (syntax TBD)
+    // their intended use is as vectors, matrices, et cetera
+    // some of the conversion rules, in particular with constructors, are also TBD
+    {
+        // create a vector (1D tensor)
+        int#2 v = int#2(10, 20);    // int#2 is syntactic sugar for int#[2]
+        v.x += 3;
+        assert(v == int#(13, 20));  // int#(...) syntactic sugar for int#N(...) with appropriate N
+
+        // arithmetic is implicit (i.e. without `v[]`) for vectors
+        assert(v * 2 == int#(26, 40));
+        // vectors can simply be nested in order to create a longer one
+        assert(int#(1, v, 4) == int#(1, 13, 20, 4));
+
+        // create 3x2 a matrix (2D tensor)
+        int#[3,2] m = int#(int#(1, 2, 3), int#(4, 5, 6));
+    }
+}

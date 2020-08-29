@@ -1,0 +1,282 @@
+#!/usr/bin/env coyote
+/*
+    A showcase of certain aspects unique to Coyote as an embeddable language.
+    Most of these have (or will have been) already been covered in earlier examples.
+
+    There is one notable (planned) feature that cannot be shown via a Coyote example:
+        The language will include builtin editing helpers, such as syntax highlighting, code folding, autocomplete, go-to-definition, find-all-references, and more.
+        Essentially an API that exposes the information that is used by (for example the Language Server Protocol. In fact, an official LSP server that exposes a LSP-compatible API will be provided.
+        This will, to our knowledge, make it the *only* (relatively) lightweight embeddable scripting language with strong builtin support for this; the fact that it is a statically-typed language should enable more powerful tooling than most scripting languages do.
+*/
+module main;
+
+import std.string: format;
+import std.io: tty;
+
+
+
+/********** OPTION TYPES **********/
+/*
+    Option types in Coyote are special in that they can hold an error value, instead
+    of a simple `null`.
+    The value of `null` still exists (at least in the current design), though it is nothing more than a specific type of an error.
+
+    The exact error handling is still TBD, so consider the examples a proposal. In particular, keywords are very likely to change, though some other changes are quite possible.
+*/
+// a new type of an error has to be declared (here with a parameter)
+error TestError(string message);
+
+// a utility function that results in an error *if* errmsg is non-empty
+int doError(bool isError, string errmsg="")
+{
+    // `throw` is an expression of type `noreturn`, to facilitate the following pattern
+    return !isError ? 1 : throw TestError(errmsg);
+}
+
+// an example utility function (example avoids extension methods, for simplicity)
+uint? arrayIndexOf(int[] array, int item)
+{
+    foreach(i, arritem : array)
+        if(arritem == item)
+            return i;
+    return null;    // `null` is technically just a special error value
+}
+
+unittest(option_types)
+{
+    // normal type, no error
+    int x = doError(false);
+    assert(x == 1);
+
+    // option type, no error
+    int? y = try doError(false);
+    // `T?` is truthy if there is no error
+    assert(y);
+    // y! "forces" the value: it yields its value, or rethrows the error
+    assert(y! == 1);
+
+    // option type, error
+    int? z = try doError(true, "some error");
+    assert(!z);
+    var error = cast(TestError)z.error;
+    assert(error.message == "some error");
+
+    // do something on exit from function, regardless of error (in this instance, it is useless work)
+    finally doError(false);
+
+    // found
+    uint? ix = arrayIndexOf([50, 60, 70], 60);
+    assert(ix && ix! == 1);
+
+    // not found (but still okay!)
+    uint? iy = arrayIndexOf([50, 60, 70], 33);
+    assert(!iy && iy is null);
+
+    // various utility operators:
+    uint u1 = ix!;      // force value: ix ? ix.value : throw ix.error
+    uint u2 = iy ?? 3;  // null coalescing: iy ? iy! : 3
+    assert(u2 == 3);
+    // or maybe `iy.?toString()`? (note the positioning of the '?')
+    string? u2 = iy?.toString(); // iy ? iy!.toString() : iy.error
+    assert(!u2);
+    // of course, they can be combined:
+    string u3 = iy?.toString() ?? "not found";
+    assert(u3 == "not found");
+}
+
+
+
+/********** TRAITS **********/
+/*
+    Traits serve as interfaces that can be implemented for arbitrary (even builtin!)
+    types. They can also be used for extension methods.
+*/
+trait Serializable
+{
+    string serialize();
+
+    // `this_t` is the type being extended
+    static this_t deserialize(string value);
+}
+
+// implement `JSONSerializable` for a builtin type
+extend int: Serializable
+{
+    string serialize() { return format("%d", this); }
+
+    // or `static type_t ...`
+    static int deserialize(string value) { return int.parse(value); }
+}
+
+// (feature TBD) implicit traits apply to *all* types whose signature matches (structural subtyping)
+implicit trait Stringifiable
+{
+    string toString();
+}
+
+unittest(traits)
+{
+    // OK: `int` has a toString (as part of language core)
+    // it does not implement `Stringifiable`, but that's okay: it's an implicit trait
+    Stringifiable t1 = 5;
+    assert(t1.toString() == "5");
+
+    // also OK; `Serializable` is not an implicit trait, but we extend `int` above
+    Serializable t2 = 3;
+    assert(t2.serialize() == "3");
+}
+
+
+
+/********** CLASSES **********/
+/*
+    Classes are passed by reference (same as in most languages). Whether inheritance
+    is going to be supported at all is as of yet TBD.
+*/
+class Foo: Serializable
+{
+    int a;
+    float b;
+    // constructor
+    this(int a, float b) { this.a = a; this.b = b; }
+
+    string serialize() { return format("%d,%f", a, b); }
+    static this_t deserialize(string value)
+    {
+        // `var` infers the type of the variable (in this case `string[]`)
+        var parts = value.split(",");
+        return new Foo(int.parse(parts[0]), float.parse(parts[1]));
+    }
+}
+// above is equivalent to: class Foo { ... } extend Foo: Serializable { ... }
+
+unittest(classes)
+{
+    var foo1 = new Foo(1, 0.5);
+    assert(foo1.serialize() == "1,0.5");
+
+    var foo2 = Foo.deserialize("-1,-0.5");
+    assert(foo2 == new Foo(-1, -0.5));
+}
+
+
+
+/********** STRUCTS **********/
+/*
+    Structs are passed by value. This is a rather unique feature for a scripting
+    language, intended to support lightweight types such as colors.
+*/
+struct Color
+{
+    float#4 c;
+    this(float#4 rgba) { this.c = rgba; }
+    this(float#3 rgb) { this(float#(rgb, 1.0)); }
+    this(float r, float g, float b, float a = 1.0) { this(float#(r, g, b, a)); }
+
+    // alternative to below
+    //string toString() { ... }
+}
+
+// with nothing after the `:`, this extends Color with anonymous trait, thus creating simple extension methods
+extend Color
+{
+    // because `Stringifiable` above is an implicit trait, this will also make said trait apply to `Color`
+    string toString()
+    {
+        return c.toString();
+    }
+}
+
+unittest(structs)
+{
+    // structs are created without `new` (to emphasize the fact that they are stack-allocated)
+    var c = Color(0.0, 0.5, 0.75);
+    assert(c.toString() == "(0.0,0.5,0.75,1.0)");
+}
+
+
+
+/********** ENUMS **********/
+// enums implement both normal "C-like" enums (albeit with their own type)
+// *and* tagged unions (latter feature inspired by Haxe)
+
+// simple symbolic enum
+enum Seek
+{
+    Set,
+    Cur,
+    End,
+}
+
+// enums can be based off of arbitrary (TBD: might have some limitations) types
+enum Device: string
+{
+    // values are optional for integer types
+    Null = "/dev/null",
+    Zero = "/dev/zero",
+    Random = "/dev/random",
+}
+
+// (feature TBD) implicit enum can be used without prefixing, similar to C enums
+implicit enum GLenum: uint
+{
+    GL_BYTE           = 0x1400,
+    GL_UNSIGNED_BYTE  = 0x1401,
+    GL_SHORT          = 0x1402,
+    GL_UNSIGNED_SHORT = 0x1403,
+    GL_FLOAT          = 0x1406,
+    GL_FIXED          = 0x140C,
+}
+
+// (feature & keywords TBD) auto enums are simple enums that can be extended; the intent is to provide for enums where the full set of used values is not known at place of writing
+// declare enum
+auto enum InputDevice;
+// add devices
+auto enum InputDevice { Keyboard, Joystick, Gamepad }
+
+enum JSONValue
+{
+    // enums members can hold values, making them serve as tagged unions
+    Object(JSONValue[string]),
+    Array(JSONValue[]),
+    String(string),
+    Number(double),
+    Boolean(bool),
+    Null,
+}
+
+unittest(enums)
+{
+    var seek = Seek.Set;
+    // `final` ensures that *all* the possible values are handled
+    final switch(seek)
+    {
+    // Seek.* may be omitted in switches on something of (static) type `Seek`:
+    case Set: break;
+    case Seek.Cur: assert(false);
+    default: assert(false);
+    }
+
+    // OK: `Device` can be implicitly converted to `string` (but not vice-versa!)
+    string devPath = Device.Null;
+    //Device dev = "/dev/zero";   // error: `string` cannot be implicitly converted to `Device`
+    // OK (would have thrown error on failure)
+    Device dev1 = Device("/dev/zero");
+    // always OK (but could return an error)
+    Device? dev2 = try Device("/dev/nonexisting");
+
+    // OK: `GLenum` is an implicit enum
+    GLenum gltype1 = GL_UNSIGNED_SHORT;
+    // a more explicit version of the above
+    GLenum gltype2 = GLenum.GL_UNSIGNED_SHORT;
+
+    var json = JSONValue.String("hello, world");
+    switch(json)
+    {
+    case String(s): tty.stdout.println("found string:", s); break;
+    case Number(n): tty.stdout.println("found number:", n); break;
+    case Boolean(b): tty.stdout.println("found boolean:", b); break;
+    case Null: tty.stdout.println("found null"); break;
+    // this is not a `final` switch, so other cases are simply ignored
+    }
+}

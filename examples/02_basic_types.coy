@@ -1,0 +1,32 @@
+// `void` is a unit type, and the type of a function returning nothing in particular
+void foo() {}
+
+// `noreturn` (name TBD) is a bottom type, meaning that it can be converted to any other type; it has no legal values, and is thus "returned" by functions that never return
+native noreturn abort();
+// e.g. this is okay, because it implicitly converts: `x < 0 ? 1 : abort()`
+
+// `char` is an unsigned integer type, equivalent in representation to ubyte (TBD: uint?); it exists as a separate type for type-safety reasons
+char a = 'x';
+
+bool b = true;
+
+// basic integer types (n.b.: there is the option of renaming them to e.g. `uint32`, and reserving `int` to be a bigint)
+byte c = -0x80;
+ubyte d = 0xFF;
+short e = -0x8000;
+ushort f = 0xFFFF;
+int g = -0x80000000;
+uint h = 0xFFFFFFFF;
+long i = -0x8000000000000000;
+ulong j = 0xFFFFFFFFFFFFFFFF;
+// 128-bit integer types are reserved for future use
+// cent k;
+// ucent l;
+
+// basic floating-point types
+float m;
+double n;
+real o; //< `float` or `double` depending on host-dependent compile-time params
+
+// top type
+dynamic p;  //< or `mixed` or `variant`?

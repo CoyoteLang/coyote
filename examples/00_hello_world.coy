@@ -1,0 +1,7 @@
+#!/usr/bin/env coy
+import std.io;
+
+int main()
+{
+    tty.stdout.println("hello world");
+}

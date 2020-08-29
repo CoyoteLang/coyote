@@ -1,0 +1,16 @@
+// tail-recursive variant
+uint factorial1(uint n, uint acc = 1)
+{
+    if(n == 0) return acc;
+    // tail call optimization is explicit, in order to preserve callstacks on errors
+    return goto factorial(n - 1, n * acc);
+}
+
+// loop variant
+uint factorial2(uint n)
+{
+    uint acc = 1;
+    while(n > 0)
+        acc *= n--;
+    return acc;
+}
