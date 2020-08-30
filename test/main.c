@@ -171,10 +171,10 @@ const char *sema_test_srcs[] = {
     "    return (((a * b)) / c) - ((d / a) / a);\n"
     "}\n",
 
-    "module factorial;\n"
-    "u32 factorial(uint num) {\n"
+    "module fibonnaci;\n"
+    "u32 fibonnaci(uint num) {\n"
     "\tif (num < 2) return 1;\n"
-    "\treturn factorial(num - 1) + factorial(num - 2);\n"
+    "\treturn fibonnaci(num - 1) + fibonnaci(num - 2);\n"
     "}\n"
 };
 
@@ -228,14 +228,13 @@ TEST(semantic_analysis) {
                     case 5:{
                         ASSERT_EQ_INT(arrlenu(root.decls), 1);
                         ASSERT_EQ_INT(root.decls[0].base.type, function);
-                        ASSERT_EQ_STR(root.decls[0].base.name, "factorial");
+                        ASSERT_EQ_STR(root.decls[0].base.name, "fibonnaci");
                         function_t func = root.decls[0].function;
                         ASSERT_EQ_INT(func.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
                         ASSERT_EQ_INT(func.return_type.u.integer.is_signed, false);
                         ASSERT_EQ_INT(func.return_type.u.integer.width, 32);
                         ASSERT_EQ_INT(func.type.category, COY_TYPEINFO_CAT_FUNCTION_);
                         ASSERT(coy_type_eql_(*func.type.u.function.rtype, func.return_type));
-                        ASSERT_EQ_INT(arrlen(func.parameters), 1);
                         ASSERT(func.type.u.function.ptypes);
                         ASSERT(func.type.u.function.ptypes[0]);
                         const struct coy_typeinfo_ *ptype = func.type.u.function.ptypes[0];
@@ -244,8 +243,8 @@ TEST(semantic_analysis) {
                         ASSERT_EQ_INT(ptype->u.integer.width, 32);
                         size_t count = 0;
                         for (const struct coy_typeinfo_ * const*T = root.decls[0].function.type.u.function.ptypes; *T; T += 1, count = count + 1) {
-                            ASSERT_EQ_PTR(*T, root.decls[0].function.parameters + count);
-                            ASSERT_EQ_PTR(*T, func.parameters + count);
+                            ASSERT_EQ_PTR(*T, root.decls[0].function.blocks[0].parameters + count);
+                            ASSERT_EQ_PTR(*T, func.blocks[0].parameters + count);
                         }
                         ASSERT_EQ_INT(count, 1);
                         // 3 blocks: conditional jump, `return 1`, `return factorial`
@@ -382,6 +381,21 @@ TEST(codegen)
             coy_set_uint(ctx, 3, 24);
             ASSERT(coy_call(ctx, "main", "foo"));
             ASSERT_EQ_INT(coy_get_uint(ctx, 0), 0);
+            break;
+        case 5:
+            coy_ensure_slots(ctx, 1);
+
+            coy_set_uint(ctx, 0, 0);
+            ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
+            ASSERT_EQ_INT(coy_get_uint(ctx, 0), 1);
+
+            coy_set_uint(ctx, 0, 1);
+            ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
+            ASSERT_EQ_INT(coy_get_uint(ctx, 0), 1);
+
+            coy_set_uint(ctx, 0, 6);
+            ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
+            ASSERT_EQ_INT(coy_get_uint(ctx, 0), 13);
             break;
         default:
             ASSERT_TODO("codegen");
@@ -840,13 +854,13 @@ int main()
     TEST_EXEC(typeinfo_function);
     TEST_EXEC(typeinfo_intern_dedup);
     TEST_EXEC(vm_basic);
-    TEST_EXEC(codegen);
     TEST_EXEC(function_builder_verify);
     TEST_EXEC(vm_factorial);
     TEST_EXEC(vm_factorial_call);
     TEST_EXEC(vm_native_call);
     TEST_EXEC(vm_native_retcall);
     TEST_EXEC(vm_native_call_direct);
+    TEST_EXEC(codegen);
     TEST_EXEC(vm_vector2_add);
     return TEST_REPORT();
 }

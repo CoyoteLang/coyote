@@ -98,7 +98,7 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx) {
         expression_value_t val;
         val.literal.type = literal;
         // TODO: error checking
-        sscanf(token.ptr, "%" SCNi64, &val.literal.value.integer.value);
+        sscanf(token.ptr, "%" SCNu32, &val.literal.value.integer.value);
         ctx->token_index += 1;
         return val;
     }
@@ -235,8 +235,12 @@ static op_type_t op_type_from(coyc_token_kind_t kind) {
         return OP_DIV;
     case COYC_TK_OPSUB:
         return OP_SUB;
+    case COYC_TK_CMPGT:
+        return OP_CMPGT;
+    case COYC_TK_CMPLT:
+        return OP_CMPLT;
     default:
-        return OP_NONE;
+        COY_TODO("More op_type_from");
     }
 }
 
@@ -320,10 +324,12 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
         ctx->token_index += 2;
         stmt.type = conditional;
         stmt.conditional.condition = parse_expression(ctx, 1);
-        stmt.conditional.false_block = arraddnptr(function->blocks, 2);
+        stmt.conditional.false_block = arraddnindex(function->blocks, 2);
         stmt.conditional.true_block = stmt.conditional.false_block + 1;
-        stmt.conditional.false_block->statements = NULL;
-        stmt.conditional.true_block->statements = NULL;
+        function->blocks[stmt.conditional.false_block].statements = NULL;
+        function->blocks[stmt.conditional.true_block].statements = NULL;
+        function->blocks[stmt.conditional.false_block].parameters = NULL;
+        function->blocks[stmt.conditional.true_block].parameters = NULL;
         if (ctx->tokens[ctx->token_index].kind != COYC_TK_RPAREN) {
             ERROR("Expected ')' to close conditional expression!");
         }
@@ -332,11 +338,11 @@ static bool parse_statement(coyc_pctx_t *ctx, function_t *function)
             ERROR("Conditional blocks not implemented yet :P");
         }
         arrput(function->active_block->statements, stmt);
-        function->active_block = stmt.conditional.true_block;
+        function->active_block = &function->blocks[stmt.conditional.true_block];
         if (parse_statement(ctx, function)) {
             ERROR("Expected true-statement for conditional before '}'!");
         }
-        function->active_block = stmt.conditional.false_block;
+        function->active_block = &function->blocks[stmt.conditional.false_block];
         return false;
     case COYC_TK_IDENT:
         if (ctx->tokens[ctx->token_index + 1].kind == COYC_TK_LPAREN) {
@@ -368,13 +374,13 @@ static void parse_function(coyc_pctx_t *ctx, struct coy_typeinfo_ return_type, c
     decl.function.blocks = NULL;
     arraddn(decl.function.blocks, 1);
     decl.function.blocks[0].statements = NULL;
+    decl.function.blocks[0].parameters = NULL;
     decl.function.active_block = &decl.function.blocks[0];
-    decl.function.parameters = NULL;
     decl.function.return_type = return_type;
     decl.function.type.category = COY_TYPEINFO_CAT_INTERNAL_;
     coyc_token_t token = ctx->tokens[ctx->token_index];
     while (token.kind == COYC_TK_TYPE || token.kind == COYC_TK_COMMA) {
-        coyc_token_kind_t expected = arrlenu(decl.function.parameters) == 0 ? COYC_TK_TYPE : COYC_TK_COMMA;
+        coyc_token_kind_t expected = arrlenu(decl.function.blocks[0].parameters) == 0 ? COYC_TK_TYPE : COYC_TK_COMMA;
         if (token.kind != expected) {
             if (token.kind == COYC_TK_COMMA) {
                 ERROR("Expected type in param list, found comma!");
@@ -397,7 +403,7 @@ static void parse_function(coyc_pctx_t *ctx, struct coy_typeinfo_ return_type, c
         parameter_t param;
         param.type = type;
         param.name = name;
-        arrput(decl.function.parameters, param);
+        arrput(decl.function.blocks[0].parameters, param);
         ctx->token_index += 1;
         token = ctx->tokens[ctx->token_index];
     }
@@ -542,14 +548,10 @@ void coyc_tree_free(coyc_pctx_t *ctx)
                                 }
                             }
                             arrfree(block.statements);
+                            arrfree(block.parameters);
                         }
                         arrfree(decl->function.blocks);
                     }
-                    for (int j = 0; j < arrlen(decl->function.parameters); j += 1) {
-                        parameter_t p = decl->function.parameters[j];
-                        free(p.name);
-                    }
-                    arrfree(decl->function.parameters);
                 }
             }
             arrfree(ctx->root->decls);

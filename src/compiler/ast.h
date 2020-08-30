@@ -24,7 +24,8 @@ typedef enum {
 typedef union {
     struct {
         // Bitcast this to the correct type
-        int64_t value;
+        // TODO: 64-bit support
+        uint32_t value;
     } integer;
 } literal_t;
 
@@ -57,6 +58,7 @@ union expression_value {
 
 typedef enum {
     OP_NONE, OP_ADD, OP_SUB, OP_MUL, OP_DIV, OP_CALL,
+    OP_CMPLT, OP_CMPGT,
 } op_type_t;
 
 struct expression {
@@ -86,7 +88,7 @@ typedef union {
         statement_type_t type;
         expression_t *condition;
         /// Blocks owned by function_t
-        block_t *true_block, *false_block;
+        uint32_t true_block, false_block;
     } conditional;
 } statement_t;
 
@@ -96,6 +98,7 @@ typedef struct {
 } parameter_t;
 
 struct block {
+    parameter_t *parameters;
     statement_t *statements;
 };
 
@@ -103,7 +106,6 @@ typedef struct function {
     decl_base_t base;
     struct coy_typeinfo_ type;
     struct coy_typeinfo_ return_type;
-    parameter_t *parameters;
     block_t *blocks;
     block_t *active_block;
 } function_t;

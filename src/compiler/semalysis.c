@@ -15,6 +15,7 @@ typedef struct {
     char *err_msg;
     ast_root_t *root;
     function_t *func;
+    block_t *block;
     statement_t *stmt;
 } coyc_sctx_t;
 
@@ -69,8 +70,12 @@ static bool op_is_arithmetic(op_type_t op) {
     return op == OP_MUL || op == OP_ADD || op == OP_SUB || op == OP_DIV;
 }
 
-bool op_is_unary(op_type_t op) {
+static bool op_is_unary(op_type_t op) {
     return op == OP_CALL || op == OP_NONE;
+}
+
+static bool op_is_cmp(op_type_t op) {
+    return op == OP_CMPLT || op == OP_CMPGT;
 }
 
 static function_t *lookup_func(coyc_sctx_t *ctx, char *name) {
@@ -86,22 +91,22 @@ static function_t *lookup_func(coyc_sctx_t *ctx, char *name) {
     return NULL;
 }
 
-static struct coy_typeinfo_ resolve_expr_val_type(coyc_sctx_t *ctx, expression_value_t value, expression_t *parent) {
-    switch (value.type) {
+struct coy_typeinfo_ resolve_expr_val_type(coyc_sctx_t *ctx, expression_value_t *value, expression_t *parent) {
+    switch (value->type) {
     case parameter:
-        return ctx->func->parameters[value.parameter.index].type;
+        return ctx->block->parameters[value->parameter.index].type;
     case expression:
-        return value.expression.expression->type;
-        break;
+        return value->expression.expression->type;
     case call:{
-        function_t *func = lookup_func(ctx, value.call.name);
+        function_t *func = lookup_func(ctx, value->call.name);
         if (!func) {
-            errorf(ctx, "Identifier not found: '%s'\n", value.call.name);
+            errorf(ctx, "Identifier not found: '%s'\n", value->call.name);
         }
         return func->return_type;
         }
     case literal:
-        if (parent->op == OP_NONE) {
+        switch (parent->op){
+        case OP_NONE:
             // Raw literal; value depends on statement
             if (ctx->stmt->type == return_) {
                 COY_ASSERT(parent == ctx->stmt->expr.value);
@@ -110,13 +115,29 @@ static struct coy_typeinfo_ resolve_expr_val_type(coyc_sctx_t *ctx, expression_v
                 ERROR("Returning integer literal from function not returning integer!");
             }
             return ctx->func->return_type;
+        case OP_CMPGT:
+        case OP_CMPLT:{
+            // Check the other side
+            expression_value_t other = value == &parent->lhs ? parent->rhs : parent->lhs;
+            switch (other.type) {
+            case identifier:
+                ERROR("UNREACHABLE");
+                break;
+            case parameter:
+                return ctx->block->parameters[other.parameter.index].type;
+            default:
+                COY_TODO("");
+            }
+            break;}
+        default:
+            ERROR("TODO: resolve subexpr literal type");
         }
-        ERROR("TODO: resolve subexpr literal type");
-        break;
+        // fallthrough
     case none:
+    case identifier:
         ERROR("UNREACHABLE");
     default:
-        ERROR("Resolve type [^parameter]");
+        ERROR("resolve more types");
     };
 
 }
@@ -129,13 +150,13 @@ static void resolve_expr_type(coyc_sctx_t *ctx, expression_t *expr) {
         resolve_expr_type(ctx, expr->rhs.expression.expression);
     }
 
-    struct coy_typeinfo_ l = resolve_expr_val_type(ctx, expr->lhs, expr);
+    struct coy_typeinfo_ l = resolve_expr_val_type(ctx, &expr->lhs, expr);
     if (op_is_unary(expr->op)) {
         expr->type = l;
         return;
     }
     else {
-        struct coy_typeinfo_ r = resolve_expr_val_type(ctx, expr->rhs, expr);
+        struct coy_typeinfo_ r = resolve_expr_val_type(ctx, &expr->rhs, expr);
 
         if (op_is_arithmetic(expr->op)) {
             if (coy_type_eql_(l, r)) {
@@ -143,50 +164,81 @@ static void resolve_expr_type(coyc_sctx_t *ctx, expression_t *expr) {
                 return;
             }
         }
+        if (op_is_cmp(expr->op)) {
+            // Comparison
+            if (coy_type_eql_(l, r)) {
+                expr->type.category = COY_TYPEINFO_CAT_BOOL_;
+                return;
+            }
+        }
+
     }
     ERROR("TODO");
 }
 
-static void resolve_idents(coyc_sctx_t *ctx, expression_t *expr) {
-    if (expr->lhs.type == expression) {
-        resolve_idents(ctx, expr->lhs.expression.expression);
-    }
-    if (expr->rhs.type == expression) {
-        resolve_idents(ctx, expr->rhs.expression.expression);
-    }
-    if (expr->lhs.type == identifier) {
-        for (size_t i = 0; i < arrlenu(ctx->func->parameters); i+= 1) {
-            parameter_t param = ctx->func->parameters[i];
-            if (!strcmp(param.name, expr->lhs.identifier.name)) {
+static void resolve_idents(coyc_sctx_t *ctx, expression_t *expr);
+
+static void resolve_ident_val(coyc_sctx_t *ctx, expression_value_t *val) {
+    switch (val->type) {
+    case literal:
+    case none:
+        break;
+    case expression:
+        resolve_idents(ctx, val->expression.expression);
+        break;
+    case identifier:
+        for (size_t i = 0; i < arrlenu(ctx->block->parameters); i += 1) {
+            parameter_t param = ctx->block->parameters[i];
+            if (!strcmp(param.name, val->identifier.name)) {
                 // name is owned by identifier, so free it.
-                free(expr->lhs.identifier.name);
-                expr->lhs.type = parameter;
-                expr->lhs.parameter.index = i;
+                free(val->identifier.name);
+                val->type = parameter;
+                val->parameter.index = i;
                 break;
             }
         }
-        if (expr->lhs.type == identifier) {
-            errorf(ctx, "identifier not found: %s", expr->lhs.identifier.name);
-        }
-    }
-    if (expr->rhs.type == identifier) {
-        for (size_t i = 0; i < arrlenu(ctx->func->parameters); i+= 1) {
-            parameter_t param = ctx->func->parameters[i];
-            if (!strcmp(param.name, expr->rhs.identifier.name)) {
-                // name is owned by identifier, so free it.
-                free(expr->rhs.identifier.name);
-                expr->rhs.type = parameter;
-                expr->rhs.parameter.index = i;
-                break;
+        if (val->type == identifier) {
+            // Check previous blocks. If found there, pull it in as a parameter.
+            block_t *old = ctx->block;
+            char *name = coy_strdup_(val->identifier.name, -1);
+            ctx->block = &ctx->func->blocks[0];
+            resolve_ident_val(ctx, val);
+            ctx->block = old;
+            if (val->type != identifier) {
+                printf("Identifier '%s' resolved as value from prior scope!\n", name);
+                if (val->type != parameter) {
+                    ERROR("TODO: non-param idents");
+                }
+                for (int i = 0; i < arrlen(ctx->func->blocks); i += 1) {
+                    if (ctx->func->blocks + i == ctx->block) {
+                        printf("\tCurrent block: %d\n", i);
+                    }
+                }
+                arrpush(ctx->block->parameters, ctx->func->blocks[0].parameters[val->parameter.index]);
             }
+            else {
+                errorf(ctx, "identifier not found: %s", name);
+            }
+            free(name);
         }
-        if (expr->rhs.type == identifier) {
-            errorf(ctx, "identifier not found: %s", expr->rhs.identifier.name);
+        break;
+    case call:
+        for (size_t i = 0; i < arrlenu(val->call.arguments); i += 1) {
+            resolve_ident_val(ctx, &val->call.arguments[i]);
         }
+        break;
+    default:
+        COY_TODO("Resolve ident val types");
     }
 }
 
-static void coyc_sema_block(coyc_sctx_t *ctx, block_t block) {
+static void resolve_idents(coyc_sctx_t *ctx, expression_t *expr) {
+    resolve_ident_val(ctx, &expr->lhs);
+    resolve_ident_val(ctx, &expr->rhs);
+}
+
+static void coyc_sema_block(coyc_sctx_t *ctx) {
+    block_t block = *ctx->block;
     for (size_t j = 0; j < arrlenu(block.statements); j += 1) {
         statement_t statement = block.statements[j];
         ctx->stmt = &statement;
@@ -204,8 +256,8 @@ static void coyc_sema_block(coyc_sctx_t *ctx, block_t block) {
             resolve_idents(ctx, statement.conditional.condition);
             resolve_expr_type(ctx, statement.conditional.condition);
             const struct coy_typeinfo_ cond_type = statement.conditional.condition->type;
-            if (cond_type.category != COY_TYPEINFO_CAT_INTEGER_ || cond_type.u.integer.is_signed) {
-                errorf(ctx, "Expected condition type to coerce to unsigned integer!");
+            if (cond_type.category != COY_TYPEINFO_CAT_BOOL_) {
+                errorf(ctx, "Expected boolean for condition!");
             }
             // DON'T sema the cond's blocks, they're owned by the function as well and will be handled as such
             break;
@@ -218,14 +270,18 @@ static void coyc_sema_block(coyc_sctx_t *ctx, block_t block) {
 static void coyc_sema_func(coyc_sctx_t *ctx) {
     ctx->func->type.category = COY_TYPEINFO_CAT_FUNCTION_;
     ctx->func->type.u.function.rtype = &ctx->func->return_type;
-    const size_t params = arrlenu(ctx->func->parameters);
+    if (arrlenu(ctx->func->blocks) == 0) {
+        COY_ASSERT(0 && "UNREACHABLE");
+    }
+    const size_t params = arrlenu(ctx->func->blocks[0].parameters);
     ctx->func->type.u.function.ptypes = malloc(sizeof(struct coy_typeinfo_*) * (params + 1));
     ctx->func->type.u.function.ptypes[params] = NULL;
     for (size_t i = 0; i < params; i += 1) {
-        ctx->func->type.u.function.ptypes[i] = &ctx->func->parameters[i].type;
+        ctx->func->type.u.function.ptypes[i] = &ctx->func->blocks[0].parameters[i].type;
     }
     for (size_t i = 0; i < arrlenu(ctx->func->blocks); i += 1) {
-        coyc_sema_block(ctx, ctx->func->blocks[i]);
+        ctx->block = &ctx->func->blocks[i];
+        coyc_sema_block(ctx);
     }
 }
 

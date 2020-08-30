@@ -12,6 +12,7 @@ typedef struct {
     struct coy_module_ *module;
     struct coy_function_ *functions;
     function_t *func;
+    block_t *block;
 } coyc_cctx_t;
 
 coyc_cctx_t coyc_codegen(ast_root_t *root);
