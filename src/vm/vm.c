@@ -459,7 +459,9 @@ void coy_vm_exec_frame_(coy_context_t* ctx)
                 printf("\t$%" PRIu32 " = %s", dstreg - frame->fp, name);
                 for(size_t i = 1; i <= instr->op.nargs; i++)
                 {
-                    printf(" %s$%" PRIu32, instr[i].arg.isconst ? "c" : "", instr[i].arg.index);
+                    const bool is_block = instr->op.code == COY_OPCODE_JMPC && (i == 3 || i == 4);
+                    const bool is_imm = instr->op.code == COY_OPCODE_JMPC && (i == 5);
+                    printf(" %s%s%" PRIu32, instr[i].arg.isconst ? "c" : "", is_block ? ".block" : is_imm ? "" : "$", instr[i].arg.index);
                 }
                 printf("\n");
             }
