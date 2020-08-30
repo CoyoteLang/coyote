@@ -92,7 +92,12 @@ static uint32_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *bu
         ERROR("TODO more ops");
     }
     if (op == COY_OPCODE_NOP) {
-        return -1;
+        if (expr->lhs.type == literal) {
+            return -1;
+        }
+        if (expr->lhs.type == parameter) {
+            return expr->lhs.parameter.index;
+        }
     }
     
     uint32_t reg = coy_function_builder_op_(builder, op, COY_OPFLG_TYPE_UINT32, false);
