@@ -175,6 +175,12 @@ const char *sema_test_srcs[] = {
     "u32 fibonnaci(uint num) {\n"
     "\tif (num < 2) return 1;\n"
     "\treturn fibonnaci(num - 1) + fibonnaci(num - 2);\n"
+    "}\n",
+
+    "module factorial;\n"
+    "u32 factorial(uint i) {\n"
+    "\tif (i < 2) return i;"
+    "\treturn factorial(i - 1) * i;"
     "}\n"
 };
 
@@ -185,9 +191,11 @@ const char *bad_parse_msgs[] = {
     NULL,
     NULL,
     NULL,
+    NULL,
 };
 
 const char *bad_sema_msgs[] = {
+    NULL,
     NULL,
     NULL,
     NULL,
@@ -229,6 +237,39 @@ TEST(semantic_analysis) {
                         ASSERT_EQ_INT(arrlenu(root.decls), 1);
                         ASSERT_EQ_INT(root.decls[0].base.type, function);
                         ASSERT_EQ_STR(root.decls[0].base.name, "fibonnaci");
+                        function_t func = root.decls[0].function;
+                        ASSERT_EQ_INT(func.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
+                        ASSERT_EQ_INT(func.return_type.u.integer.is_signed, false);
+                        ASSERT_EQ_INT(func.return_type.u.integer.width, 32);
+                        ASSERT_EQ_INT(func.type.category, COY_TYPEINFO_CAT_FUNCTION_);
+                        ASSERT(coy_type_eql_(*func.type.u.function.rtype, func.return_type));
+                        ASSERT(func.type.u.function.ptypes);
+                        ASSERT(func.type.u.function.ptypes[0]);
+                        const struct coy_typeinfo_ *ptype = func.type.u.function.ptypes[0];
+                        ASSERT_EQ_INT(ptype->category, COY_TYPEINFO_CAT_INTEGER_);
+                        ASSERT_EQ_INT(ptype->u.integer.is_signed, false);
+                        ASSERT_EQ_INT(ptype->u.integer.width, 32);
+                        size_t count = 0;
+                        for (const struct coy_typeinfo_ * const*T = root.decls[0].function.type.u.function.ptypes; *T; T += 1, count = count + 1) {
+                            ASSERT_EQ_PTR(*T, root.decls[0].function.blocks[0].parameters + count);
+                            ASSERT_EQ_PTR(*T, func.blocks[0].parameters + count);
+                        }
+                        ASSERT_EQ_INT(count, 1);
+                        // 3 blocks: conditional jump, `return 1`, `return fibonacci`
+                        ASSERT_EQ_INT(arrlenu(func.blocks), 3);
+                        // Conditional
+                        ASSERT_EQ_INT(arrlenu(func.blocks[0].statements), 1);
+                        statement_t cond= func.blocks[0].statements[0];
+                        ASSERT_EQ_INT(cond.type, conditional);
+                        // Return 1
+                        ASSERT_EQ_INT(arrlenu(func.blocks[1].statements), 1);
+                        // Tail call
+                        ASSERT_EQ_INT(arrlenu(func.blocks[2].statements), 1);
+                        break;}
+                    case 6:{
+                        ASSERT_EQ_INT(arrlenu(root.decls), 1);
+                        ASSERT_EQ_INT(root.decls[0].base.type, function);
+                        ASSERT_EQ_STR(root.decls[0].base.name, "factorial");
                         function_t func = root.decls[0].function;
                         ASSERT_EQ_INT(func.return_type.category, COY_TYPEINFO_CAT_INTEGER_);
                         ASSERT_EQ_INT(func.return_type.u.integer.is_signed, false);
@@ -354,7 +395,7 @@ TEST(codegen)
     coyc_pctx_t pctx;
     ast_root_t root;
     coyc_lexer_t lexer;
-    for (int i = 4; i <= 5; i += 1) {
+    for (int i = 4; i <= 6; i += 1) {
         const char *src = sema_test_srcs[i];
         PRECONDITION(coyc_lexer_init(&lexer, "<src>", src, strlen(src) - 1));
         pctx.lexer = &lexer;
@@ -396,6 +437,12 @@ TEST(codegen)
             coy_set_uint(ctx, 0, 6);
             ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
             ASSERT_EQ_INT(coy_get_uint(ctx, 0), 13);
+            break;
+        case 6:
+            coy_ensure_slots(ctx, 1);
+            coy_set_uint(ctx, 0, 6);
+            ASSERT(coy_call(ctx, "factorial", "factorial"));
+            ASSERT_EQ_INT(coy_get_uint(ctx, 0), 720);
             break;
         default:
             ASSERT_TODO("codegen");
@@ -860,7 +907,7 @@ int main()
     TEST_EXEC(vm_native_call);
     TEST_EXEC(vm_native_retcall);
     TEST_EXEC(vm_native_call_direct);
-    TEST_EXEC(codegen);
     TEST_EXEC(vm_vector2_add);
+    TEST_EXEC(codegen);
     return TEST_REPORT();
 }
