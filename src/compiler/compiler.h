@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#include "vm/env.h"
+#include "../vm/env.h"
 
 typedef struct coyc {
     coy_env_t *env;

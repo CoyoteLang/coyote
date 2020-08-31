@@ -1,0 +1,14 @@
+module main;
+
+uint factorial(uint n)
+{
+    if(n < 2)
+        return 1;
+    return n * factorial(n - 1);
+}
+
+uint main()
+{
+    return factorial(6);
+    //return factpart(6, 1);
+}

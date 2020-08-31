@@ -120,13 +120,22 @@ with SourceLibrary('stb_ds') as stb_ds:
     stb_ds.add_sources_glob('lib/stb_ds.c')
     stb_ds.add_headers_glob('lib/stb_ds.h')
 
+with SourceLibrary('libcoy') as libcoy:
+    libcoy.add_sources_glob('src/**/*.c')
+    libcoy.add_headers_glob('src/**/*.h', 'src/**/*.inl')
+    libcoy.add_includes('lib')
+    libcoy.add_dependencies('stb_ds')
+
+with Executable('coyote') as coyote:
+    coyote.add_sources_glob('programs/coyote.c')
+    coyote.add_includes('src')
+    coyote.add_dependencies('libcoy')
+
 with Executable('test') as test:
-    test.add_sources_glob('src/**/*.c')
     test.add_sources_glob('test/main.c')
-    test.add_headers_glob('src/**/*.h', 'src/**/*.inl')
     test.add_headers_glob('test/**/*.h', 'test/**/*.inl')
-    test.add_includes('src', 'lib')
-    test.add_dependencies('stb_ds')
+    test.add_includes('src')
+    test.add_dependencies('libcoy')
 
 # create object directories
 for tgt in Target.all.values():
@@ -141,8 +150,10 @@ LDFLAGS+={LDFLAGS}
 INCLUDES+={includes_all}
 
 # for easy run in repl.it
-default: test
-\t./{BIN_DIR}/test
+#default: test
+#\t./{BIN_DIR}/test
+default: coyote
+\t./{BIN_DIR}/coyote programs/test.coy
 
 all: {targets_all}
 
@@ -167,20 +178,22 @@ def emit_target(tgt, emitted=None):
         return
     emitted.add(tgt.name)
 
-    dep_depends = []
+    dep_depends_objects = []
+    dep_depends_headers = []
     # emit the target's own dependencies
     for dep in sorted(tgt.get_transitive_dependencies().values(), key=lambda v: v.name):
         emit_target(dep, emitted)
-        dep_depends.append('$({dep_name}_OBJECTS)'.format(dep_name=dep.name))
-        dep_depends.append('$({dep_name}_HEADERS)'.format(dep_name=dep.name))
+        dep_depends_objects.append('$({dep_name}_OBJECTS)'.format(dep_name=dep.name))
+        dep_depends_headers.append('$({dep_name}_HEADERS)'.format(dep_name=dep.name))
 
     artifacts = sorted(tgt.paths)
     params = dict(
-        t_name=t_name,
+        t_name=tgt.name,
         t_artifacts=' '.join(artifacts),
         t_objects=' '.join(sorted(tgt.sources.values())),
         t_headers=' '.join(sorted(tgt.headers)),
-        dep_depends=''.join(' ' + dd for dd in dep_depends),
+        dep_depends_objects=''.join(' ' + dd for dd in dep_depends_objects),
+        dep_depends_headers=''.join(' ' + dd for dd in dep_depends_headers),
     )
     t.append('''\
 
@@ -200,7 +213,7 @@ def emit_target(tgt, emitted=None):
 '''.format(**params))
     for a in artifacts:
         t.append('''\
-{t_artifact}: $({t_name}_OBJECTS) {dep_depends}
+{t_artifact}: $({t_name}_OBJECTS) {dep_depends_objects}
 \t$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 '''.format(**params, t_artifact=a))
 
@@ -209,12 +222,12 @@ for t_name in sorted(Target.all):
     emit_target(Target.all[t_name], emitted)
 
 t = ''.join(t)
-print('-' * 10)
-if '-Werror' in CFLAGS:
-    print("Makefile generated.")
-else:
-    print(t.rstrip())
-print('-' * 10)
+#print('-' * 10)
+#if '-Werror' in CFLAGS:
+#    print("Makefile generated.")
+#else:
+#    print(t.rstrip())
+#print('-' * 10)
 
 with open('Makefile', 'w') as f:
     f.write(t)

@@ -6,7 +6,7 @@
 #include <stdint.h>
 
 #include "lexer.h"
-#include "typeinfo.h"
+#include "../typeinfo.h"
 
 typedef struct {
     enum {function, import} type;
