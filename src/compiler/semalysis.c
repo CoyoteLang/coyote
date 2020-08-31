@@ -205,14 +205,8 @@ static void resolve_ident_val(coyc_sctx_t *ctx, expression_value_t *val) {
             resolve_ident_val(ctx, val);
             ctx->block = old;
             if (val->type != identifier) {
-                printf("Identifier '%s' resolved as value from prior scope!\n", name);
                 if (val->type != parameter) {
                     ERROR("TODO: non-param idents");
-                }
-                for (int i = 0; i < arrlen(ctx->func->blocks); i += 1) {
-                    if (ctx->func->blocks + i == ctx->block) {
-                        printf("\tCurrent block: %d\n", i);
-                    }
                 }
                 arrpush(ctx->block->parameters, ctx->func->blocks[0].parameters[val->parameter.index]);
             }
