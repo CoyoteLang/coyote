@@ -254,13 +254,20 @@ static void coyc_gen_func(coyc_cctx_t *ctx, function_t func) {
     coy_module_inject_function_(ctx->module, func.base.name, fun);
 }
 
-coyc_cctx_t coyc_codegen(ast_root_t *root) {
+coyc_cctx_t coyc_codegen(ast_root_t *root, coy_env_t *env) {
     coyc_cctx_t ctx;
     ctx.err_msg = NULL;
     ctx.functions = NULL;
     ctx.block = NULL;
-    coy_env_init(&ctx.env);
-    ctx.module = coy_module_create_(&ctx.env, root->module_name, false);
+    if (env) {
+        ctx.env = env;
+    }
+    else {
+        // TODO: remove this. For compatibility with old tests only.
+        ctx.env = malloc(sizeof(coy_env_t));
+        coy_env_init(ctx.env);
+    }
+    ctx.module = coy_module_create_(ctx.env, root->module_name, false);
     if (setjmp(ctx.err_env) == 255) {
         coyc_cg_free(ctx);
         ctx.module = NULL;

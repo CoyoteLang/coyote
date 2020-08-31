@@ -2,6 +2,7 @@
 #include "compiler/ast.h"
 #include "compiler/semalysis.h"
 #include "compiler/codegen.h"
+#include "compiler/compiler.h"
 #include "function_builder.h"
 
 #include "vm/register.h"
@@ -388,30 +389,67 @@ TEST(typeinfo_intern_dedup)
     coy_env_deinit(&env);
 }
 
+TEST(compiler)
+{
+    coy_env_t env;
+    coyc_t compiler;
+    PRECONDITION(coy_env_init(&env));
+    PRECONDITION(coyc_init(&compiler, &env));
+    for (int i = 4; i <= 6; i += 1) {
+        ASSERT(coyc_compile(&compiler, NULL, sema_test_srcs[i]));
+    }
+    ASSERT(coyc_deinit(&compiler));
+    coy_context_t* ctx = coy_context_create(&env);
+    ASSERT(ctx);
+    coy_ensure_slots(ctx, 4);
+    coy_set_uint(ctx, 0, 2);
+    coy_set_uint(ctx, 1, 3);
+    coy_set_uint(ctx, 2, 1);
+    coy_set_uint(ctx, 3, 24);
+    ASSERT(coy_call(ctx, "main", "foo"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 0);
+    coy_set_uint(ctx, 0, 0);
+    ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 1);
+
+    coy_set_uint(ctx, 0, 1);
+    ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 1);
+
+    coy_set_uint(ctx, 0, 6);
+    ASSERT(coy_call(ctx, "fibonnaci", "fibonnaci"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 13);
+    coy_ensure_slots(ctx, 1);
+    coy_set_uint(ctx, 0, 6);
+    ASSERT(coy_call(ctx, "factorial", "factorial"));
+    ASSERT_EQ_INT(coy_get_uint(ctx, 0), 720);
+
+}
+
 TEST(codegen)
 {
         // 9 - (8 / 3)
     coyc_pctx_t pctx;
     ast_root_t root;
     coyc_lexer_t lexer;
+    pctx.lexer = &lexer;
+    pctx.root = &root;
     for (int i = 4; i <= 6; i += 1) {
         const char *src = sema_test_srcs[i];
         PRECONDITION(coyc_lexer_init(&lexer, "<src>", src, strlen(src) - 1));
-        pctx.lexer = &lexer;
-        pctx.root = &root;
         coyc_parse(&pctx);
         ASSERT_EQ_STR(pctx.err_msg, NULL);
         char *smsg = coyc_semalysis(&root);
         ASSERT_EQ_STR(smsg, NULL);
 
-        coyc_cctx_t cctx = coyc_codegen(&root);
+        coyc_cctx_t cctx = coyc_codegen(&root, NULL);
         ASSERT_EQ_STR(cctx.err_msg, NULL);
         ASSERT(cctx.module);
 
         coyc_tree_free(&pctx);
         coyc_lexer_deinit(&lexer);
 
-        coy_context_t* ctx = coy_context_create(&cctx.env);
+        coy_context_t* ctx = coy_context_create(cctx.env);
         switch (i) {
         case 4:
             coy_ensure_slots(ctx, 4);
@@ -908,5 +946,6 @@ int main()
     TEST_EXEC(vm_native_call_direct);
     TEST_EXEC(vm_vector2_add);
     TEST_EXEC(codegen);
+    TEST_EXEC(compiler);
     return TEST_REPORT();
 }
