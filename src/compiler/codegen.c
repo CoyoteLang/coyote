@@ -12,6 +12,7 @@
 #include "util/hints.h"
 #include "util/string.h"
 #include "function_builder.h"
+#include "vm/register.h"
 
 static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_cctx_t *ctx, const char *fmt, ...) {
     va_list args;

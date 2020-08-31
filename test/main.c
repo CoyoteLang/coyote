@@ -4,6 +4,8 @@
 #include "compiler/codegen.h"
 #include "function_builder.h"
 
+#include "vm/register.h"
+#include "vm/context.h"
 #include "vm/env.h"
 #include "bytecode.h"
 
@@ -14,9 +16,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-
-// TEMPORARY
-#include "vm/compat_shims.h"
 
 static const char src_lexer_parser[] =
         "module test;\n"

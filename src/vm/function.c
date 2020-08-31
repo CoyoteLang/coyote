@@ -1,6 +1,9 @@
+#include "env.h"
 #include "function.h"
-#include "../util/debug.h"
 #include "register.h"
+
+#include "../util/bitarray.h"
+#include "../util/debug.h"
 #include "../bytecode.h"
 
 #include "stb_ds.h"

@@ -4,6 +4,7 @@
 #include <setjmp.h>
 #include "ast.h"
 #include "bytecode.h"
+#include "vm/env.h"
 
 typedef struct {
     jmp_buf err_env;

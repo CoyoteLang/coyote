@@ -1,8 +1,11 @@
 #include "function.h"
 #include "context.h"
-#include "../bytecode.h"
+#include "stack.h"
+#include "register.h"
+
 #include "stb_ds.h"
 
+#include "../bytecode.h"
 #include "../util/bitarray.h"
 #include "../util/debug.h"
 

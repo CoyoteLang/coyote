@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#include "vm/compat_shims.h"
-
 typedef struct coy_compat_module_
 {
     const struct coy_refval_vtbl_* vtbl;
