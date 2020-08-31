@@ -106,7 +106,6 @@ static expression_value_t compute_atom(coyc_pctx_t *ctx) {
         if (ctx->tokens[ctx->token_index + 1].kind == COYC_TK_LPAREN) {
             // Function call
             char *name = coyc_token_read(token);
-            fprintf(stderr, "Parsed call to function %s\n", name);
             ctx->token_index += 2;
             token = ctx->tokens[ctx->token_index];
             expression_value_t value;
