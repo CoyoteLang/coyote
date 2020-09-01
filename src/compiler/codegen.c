@@ -26,7 +26,7 @@ static COY_HINT_NORETURN COY_HINT_PRINTF(2, 3) void errorf(coyc_cctx_t *ctx, con
 
 #define ERROR(msg) do { errorf(ctx, "%s at %s:%d", msg, __FILE__, __LINE__); } while (0);
 
-static uint32_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_t *expr);
+static int64_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_t *expr);
 
 /// Returns the value within a register, -1 if none is used (e.g. for immediates), or -2 if there is no value.
 static int64_t expr_value_reg(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_value_t value) {
@@ -42,9 +42,6 @@ static int64_t expr_value_reg(coyc_cctx_t *ctx, struct coy_function_builder_ *bu
         int64_t *regs = malloc(arg_count * sizeof(int64_t));
         for (size_t i = 0; i < arg_count; i += 1) {
             regs[i] = expr_value_reg(ctx, builder, value.call.arguments[i]);
-            if (regs[i] == -1) {
-                COY_TODO("args outside registers");
-            }
         }
         size_t size = snprintf(NULL, 0, "%s;%s", ctx->module->name, value.call.name);
         char *buf = malloc(size + 1);
@@ -53,7 +50,28 @@ static int64_t expr_value_reg(coyc_cctx_t *ctx, struct coy_function_builder_ *bu
         uint32_t reg = coy_function_builder_op_(builder, COY_OPCODE_CALL, 0, false);
         coy_function_builder_arg_const_sym_(builder, buf);
         for (size_t i = 0; i < arg_count; i += 1) {
-            coy_function_builder_arg_reg_(builder, regs[i]);
+            if (regs[i] == -1) {
+                uint32_t v;
+                expression_value_t arg = value.call.arguments[i];
+                switch (arg.type) {
+                case literal:
+                    v = arg.literal.value.integer.value;
+                    break;
+                case expression:
+                    if (arg.expression.expression->op != OP_NONE || arg.expression.expression->lhs.type != literal) {
+                        ERROR("Internal error: invalid expr-lit found");
+                    }
+                    v = arg.expression.expression->lhs.literal.value.integer.value;
+                    break;
+                default:
+                    ERROR("Internal error: expected literal, not found???");
+                }
+                printf("Passing literal argument: %u\n", v);
+                coy_function_builder_arg_const_val_(builder, (union coy_register_){.u32=v});
+            }
+            else {
+                coy_function_builder_arg_reg_(builder, regs[i]);
+            }
         }
         return reg;}
     case literal:
@@ -83,7 +101,7 @@ static coy_instruction_opcode_t fromToken(op_type_t op) {
 }
 
 /// Returns the SSA reg containing the final result 
-static uint32_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_t *expr) {
+static int64_t coyc_gen_expr(coyc_cctx_t *ctx, struct coy_function_builder_ *builder, expression_t *expr) {
     int64_t lhs = expr_value_reg(ctx, builder, expr->lhs);
     int64_t rhs = expr_value_reg(ctx, builder, expr->rhs);
 
