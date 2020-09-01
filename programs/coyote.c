@@ -21,7 +21,7 @@ static char* readTextFile(const char* fname)
     CHECKF(!fseek(file, 0, SEEK_SET), "Unable to seek to start of file `%s`: %s", fname, strerror(errno));
     char* buf = malloc(flen + 1);
     CHECKF(buf, "Unable to allocate memory for file `%s`", fname);
-    CHECKF(fread(buf, 1, flen, file) == flen, "Unable to read file `%s`: %s\n", fname, strerror(errno));
+    CHECKF(fread(buf, 1, flen, file) == (size_t)flen, "Unable to read file `%s`: %s\n", fname, strerror(errno));
     buf[flen] = 0;
     fclose(file);
     return buf;
